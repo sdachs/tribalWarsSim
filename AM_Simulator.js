@@ -438,10 +438,20 @@ DSUtil = {
 
 }
 
+function updateUI() {
+    //update
+    updateSettings()
+    updateConstruction()
+    updateQueTable()
+    updateVillageInfo(simVillage)
+    updateTemplate()
+    initTT()
+}
+
 function init() {
     simVillage = {
         building: {
-            /*main: 1,
+            main: 1,
             barracks: 0,
             stable: 0,
             garage: 0,
@@ -454,8 +464,8 @@ function init() {
             farm: 1,
             storage: 1,
             hide: 0,
-            wall: 0 */
-            barracks: 25,
+            wall: 0
+            /*barracks: 25,
             farm: 30,
             garage: 8,
             hide: 9,
@@ -469,10 +479,10 @@ function init() {
             stone: 30,
             storage: 30,
             wall: 20,
-            wood: 30
+            wood: 30*/
         },
         nextbuilding: {
-            /*main: 1,
+            main: 1,
             barracks: 0,
             stable: 0,
             garage: 0,
@@ -485,8 +495,8 @@ function init() {
             farm: 1,
             storage: 1,
             hide: 0,
-            wall: 0 */
-            barracks: 25,
+            wall: 0
+            /*barracks: 25,
             farm: 30,
             garage: 8,
             hide: 9,
@@ -500,7 +510,7 @@ function init() {
             stone: 30,
             storage: 30,
             wall: 20,
-            wood: 30
+            wood: 30*/
         },
         wood: 900,
         stone: 900,
@@ -519,13 +529,12 @@ function init() {
     buildQue = []
     template = ""
     constructionObjs = {}
+    startRes = {w:900,s:900,i:900}
+    startRes.building = {...simVillage.building}
 
-    //update
-    updateConstruction()
-    updateQueTable()
-    updateVillageInfo(simVillage)
-    updateTemplate()
-    initTT()
+    //setup(1.6,1,1,900,900,900,"{barracks:25,farm:30,garage:8,hide:9,iron:30,main:20,market:23,place:1,smith:20,snob:1,stable:20,stone:30,storage:30,wall:20,wood:30}");
+    setup(1.6,2,1.35,900,900,900,"{main:1,barracks:0,stable:0,garage:0,snob:0,smith:0,market:0,wood:0,stone:0,iron:0,farm:1,storage:1,hide:0,wall:0}");
+    //updateUI();
 }
 init()
 
@@ -537,7 +546,7 @@ function build(id, cheap) {
     let enoughIron = simVillage.iron - (cheap ? constrObj.cIron : constrObj.iron)
 
     if (enoughWood >= 0 && enoughStone >= 0 && enoughIron >= 0) {
-        template += "build('" + id + "'," + cheap + ");"
+        template += "build(" + id + "," + cheap + ");"
         simVillage.wood = enoughWood
         simVillage.stone = enoughStone
         simVillage.iron = enoughIron
@@ -549,32 +558,36 @@ function build(id, cheap) {
         //let[type,lvl,hqlvl] = id.split('|')
         simVillage.nextbuilding[constrObj.name] = parseInt(constrObj.lvl)
 
-        //update
-        updateQueTable()
-        updateVillageInfo(simVillage)
-        updateConstruction()
-        updateTemplate()
-        initTT()
+        updateUI()
     } else {
         idle((cheap ? constrObj.cWood : constrObj.wood), (cheap ? constrObj.cStone : constrObj.stone), (cheap ? constrObj.cIron : constrObj.iron))
     }
 }
 
 function idle(wood, stone, iron, idleTime) {
+    wood=parseFloat(wood);
+    stone=parseFloat(stone);
+    iron=parseFloat(iron);
+    idleTime=parseFloat(idleTime);
+
     template += "idle(" + wood + "," + stone + "," + iron + "," + idleTime + ");"
     let time = simVillage.age
     let diffWood = wood - simVillage.wood
     let diffStone = stone - simVillage.stone
     let diffIron = iron - simVillage.iron
 
-    while (idleTime == undefined ? (Math.max(diffWood, diffStone, diffIron) > 0) : (time < (idleTime + simVillage.age))) {
-        let waitingTime = (idleTime == undefined ? (Math.max(diffWood / simVillage.wood_prod(), diffStone / simVillage.stone_prod(), diffIron / simVillage.iron_prod())) : idleTime)
+    function isIdle() {
+        return idleTime == undefined || isNaN(idleTime);
+    }
+
+    while (isIdle() ? (Math.max(diffWood, diffStone, diffIron) > 0) : (time < (idleTime + simVillage.age))) {
+        let waitingTime = (isIdle() ? (Math.max(diffWood / simVillage.wood_prod(), diffStone / simVillage.stone_prod(), diffIron / simVillage.iron_prod())) : idleTime)
         if (buildQue.length > 0) {
             let constrObj = buildQue[0]
             let timeLeft = (constrObj.time / Math.pow(2, constrObj.timesReduced)) - constrObj.timePassed
             if (waitingTime >= timeLeft) {
                 //calc res for timeLeft of Building in que
-                if (idleTime == undefined) {
+                if (isIdle()) {
                     diffWood -= timeLeft * simVillage.wood_prod()
                     diffStone -= timeLeft * simVillage.stone_prod()
                     diffIron -= timeLeft * simVillage.iron_prod()
@@ -591,16 +604,16 @@ function idle(wood, stone, iron, idleTime) {
 
                 let finishedBuilding = buildQue.shift()
                 simVillage.bounty.push({
-                    wood: Math.max(150, Math.min((finishedBuilding.cheap ? finishedBuilding.cWood : finishedBuilding.wood), 2000)),
-                    stone: Math.max(150, Math.min((finishedBuilding.cheap ? finishedBuilding.cStone : finishedBuilding.stone), 2000)),
-                    iron: Math.max(100, Math.min((finishedBuilding.cheap ? finishedBuilding.cIron : finishedBuilding.iron), 2000))
+                    wood: Math.max(150, Math.min((0.1*finishedBuilding.wood), 2000)),
+                    stone: Math.max(150, Math.min((0.1*finishedBuilding.stone), 2000)),
+                    iron: Math.max(100, Math.min((0.1*finishedBuilding.iron), 2000))
                 })
                 console.log(finishedBuilding)
                 //TODO template
 
             } else {
                 //calc res for waitingTime
-                if (idleTime == undefined) {
+                if (isIdle()) {
                     diffWood -= waitingTime * simVillage.wood_prod()
                     diffStone -= waitingTime * simVillage.stone_prod()
                     diffIron -= waitingTime * simVillage.iron_prod()
@@ -616,7 +629,7 @@ function idle(wood, stone, iron, idleTime) {
             }
         } else {
             //calc res for waitingTime
-            if (idleTime == undefined) {
+            if (isIdle()) {
                 diffWood -= waitingTime * simVillage.wood_prod()
                 diffStone -= waitingTime * simVillage.stone_prod()
                 diffIron -= waitingTime * simVillage.iron_prod()
@@ -629,19 +642,14 @@ function idle(wood, stone, iron, idleTime) {
         }
     }
     //calculate new storage values
-    if (idleTime == undefined) {
+    if (isIdle()) {
         simVillage.wood = wood - diffWood
         simVillage.stone = stone - diffStone
         simVillage.iron = iron - diffIron
     }
 
     simVillage.age = time
-    //update
-    updateQueTable()
-    updateVillageInfo(simVillage)
-    updateConstruction()
-    updateTemplate()
-    initTT()
+    updateUI()
 
 }
 
@@ -706,38 +714,39 @@ function simIdle(wood, stone, iron) {
 }
 
 function reduceTime(id) {
-    template += "reduceTime('" + id + "');"
+    template += "reduceTime(" + id + ");"
     buildQue.find(e=>e.id === id).timesReduced += 1
     simVillage.ppUsed += 10
 
-    //update
-    updateQueTable()
-    updateVillageInfo(simVillage)
-    updateConstruction()
-    updateTemplate()
-    initTT()
+    updateUI()
 }
 
 function cancel(id) {
+    let [type,lvl,hqlvl] = id.split('|')
+    //check for same building more than one time in que
+    let matchingType = buildQue.filter(e=>e.id.includes(type))
+    if (matchingType.length > 1){
+        matchingType = matchingType.sort((a,b)=>a.lvl<b.lvl)
+        lvl = matchingType[0].lvl
+        hqlvl = matchingType[0].hqlvl
+        id = (type + '|' + (parseInt(lvl)) + '|' + hqlvl)
+    }
+    //remove building from que and template
     let index = buildQue.findIndex(e=>e.id === id)
     if (index > -1) {
         let constrObj = buildQue[index]
         simVillage.ppUsed -= (10 * constrObj.timesReduced) + (constrObj.cheap ? 30 : 0)
-        constrObj.timesReduced
         simVillage.wood += (constrObj.cheap ? constrObj.cWood : constrObj.wood)
         simVillage.stone += (constrObj.cheap ? constrObj.cStone : constrObj.stone)
         simVillage.iron += (constrObj.cheap ? constrObj.cIron : constrObj.iron)
         simVillage.nextbuilding[constrObj.name] = parseInt(constrObj.lvl - 1)
+        simVillage.age -= constrObj.timePassed
 
         buildQue.splice(index, 1);
+        template  = template.replace("build("+id+","+constrObj.cheap+");",'')
         //remove element
 
-        //update
-        updateQueTable()
-        updateVillageInfo(simVillage)
-        updateConstruction()
-        updateTemplate()
-        initTT()
+        updateUI()
     }
 }
 
@@ -755,38 +764,120 @@ function claim() {
     updateTemplate()
     initTT()
 }
-function loadTemplate() {
-    let unprocessedTemplate = $('#c_config')[0].value
+
+function loadTemplate(unprocessedTemplate) {
     let actions = unprocessedTemplate.split(';')
     for (let index = 0; index < actions.length - 1; index++) {
-        let[task,vars] = actions[index].split('(')
+        let [task, vars] = actions[index].split('(')
         switch (task) {
-        case "claim":
-            claim()
-            break;
-        case "cancel":
-            cancel(vars.replace(')', '').replaceAll("'", ''))
-            break;
-        case "reduceTime":
-            reduceTime(vars.replace(')', '').replaceAll("'", ''))
-            break;
-        case "idle":
-            let[wood,stone,iron,idleTime] = vars.split(',')
-            if ('undefined' == idleTime.replace(')', '')) {
-                idle(wood, stone, iron)
-            } else {
-                idle(wood, stone, iron, idleTime.replace(')', ''))
-            }
-            break;
-        case "build":
-            let[id,cheap] = vars.split(',')
-            build(id.replaceAll("'", ''), cheap.replace(')', '') == "true")
-            break;
-        default:
-            alert('Wrong Task')
+            case "claim":
+                claim()
+                break;
+            case "cancel":
+                cancel(vars.replace(')', '').replaceAll("'", ''))
+                break;
+            case "reduceTime":
+                reduceTime(vars.replace(')', '').replaceAll("'", ''))
+                break;
+            case "idle":
+                let [wood, stone, iron, idleTime] = vars.split(',')
+                if ('undefined' == idleTime.replace(')', '')) {
+                    idle(wood, stone, iron)
+                } else {
+                    idle(wood, stone, iron, idleTime.replace(')', ''))
+                }
+                break;
+            case "build":
+                let [id, cheap] = vars.split(',')
+                build(id.replaceAll("'", ''), cheap.replace(')', '') == "true")
+                break;
+            case "setup":
+               let [speed, baseProd,bonusPRod,w,s,i,building] = vars.split('|')
+                setup(speed,baseProd,bonusPRod,w,s,i,building)
+                break;
+            default:
+                alert('Fehler bei:' + actions[index])
         }
     }
-    alert("successsssssss")
+    //alert("Erfolgreich geladen")
+}
+
+function promptTemplate() {
+    let unprocessedTemplate = prompt("Configuration hier einfügen")//$('#c_config')[0].value
+    loadTemplate(unprocessedTemplate);
+}
+
+function revertLastStep(){
+    let unprocessedTemplate = $('#c_config')[0].value
+    let tmp = unprocessedTemplate.match(/;[^;]*;$/)
+    if(tmp != null && tmp.length>0) {
+        loadTemplate(unprocessedTemplate.replace(/;[^;]*;$/, ';'))
+    } else {
+        loadTemplate(unprocessedTemplate);
+    }
+}
+
+function updateSettings(){
+    let text = `
+    <th>Geschwindichkeit: <input id="speed" style="width: 4em;margin:  1px;" min="1" max="5" value="${DSUtil.speed}"></input></th>
+    <th>Minen-Basisproduktion: <input id="baseProd" style="width: 4em;margin:  1px;" min="1" max="5" value="${DSUtil.mineBaseProd}"></input></th>
+    <th>Bonusproduktion in % : <input id="bonusProd" style="width: 4em;margin:  1px;" min="0" max="93" value="${DSUtil.bonusProd*100-100}"></input></th>
+    <th>Holz : <input id="wood" style="width: 4em;margin:  1px;" min="0" max="400000" value="${startRes.w}"></input></th>
+    <th>Lehm : <input id="stone" style="width: 4em;margin:  1px;" min="0" max="400000" value="${startRes.s}"></input></th>
+    <th>Eisen : <input id="iron" style="width: 4em;margin:  1px;" min="0" max="400000" value="${startRes.i}"></input></th>
+    <th>Gebäude: <input id="buildings" style="width: 4em;margin:  1px;" value="${JSON.stringify(startRes.building).replaceAll('"','')}"></input></th>
+    <th><a class="btn" onclick="applySettings()">Anwenden</a></th>
+`
+    $('#rtfr-header').html(text);
+}
+
+function applySettings() {
+    if($('#c_config')[0].value.match(/;[^;]*;$/).length==0||confirm("Sind sie sicher das sie mit den Einstellungen der Kopfleiste wieder neu beginnen wollen?")) {
+        setup(parseFloat($('#speed')[0].value),
+            parseFloat($('#baseProd')[0].value),
+            1 + (parseFloat($('#bonusProd')[0].value)) / 100,
+            parseFloat($('#wood')[0].value),
+            parseFloat($('#stone')[0].value),
+            parseFloat($('#iron')[0].value),
+            $('#buildings')[0].value);
+    }
+}
+
+function setup(speed,baseProd,bonusProd,w,s,i,building){
+    DSUtil.speed = parseFloat(speed)
+    DSUtil.mineBaseProd = parseFloat(baseProd)
+    DSUtil.bonusProd = parseFloat(bonusProd)
+    simVillage.wood = parseFloat(w)
+    simVillage.stone = parseFloat(s)
+    simVillage.iron = parseFloat(i)
+    simVillage.building = parseBuilding(building)
+
+    startRes.w = parseFloat(w)
+    startRes.s = parseFloat(s)
+    startRes.i = parseFloat(i)
+    startRes.building = {...simVillage.building}
+
+    let templ = "setup("+DSUtil.speed+"|"+DSUtil.mineBaseProd+"|"+DSUtil.bonusProd+"|"+simVillage.wood+"|"+simVillage.stone+"|"+simVillage.iron+"|"+JSON.stringify(simVillage.building).replaceAll('"','')+");"
+    template = templ
+
+    simVillage.nextbuilding = {...simVillage.building}
+    simVillage.ppUsed = 0
+    simVillage.age = 0
+    simVillage.bounty = []
+    buildQue = []
+    constructionObjs = {}
+
+    updateUI()
+}
+
+function parseBuilding(text) {
+    let building = {}
+    let buildings = text.replace('{','').replace('}','').split(',')
+    for (const build of buildings) {
+        const [type,lvl] = build.split(':')
+        building[type] = parseInt(lvl)
+    }
+    return building
 }
 
 //UI part
@@ -794,10 +885,11 @@ function loadTemplate() {
 function updateTemplate() {
     const elements = `
 	<h2>Configuration<h2>
-	<input id="c_config" style="width: 90%;"></input>
-	<a class="btn" onclick="loadTemplate()">Load</a>
+	<input id="c_config" style="width: 81%;" disabled>
+	<a class="btn"onclick="copyTextToClipboard($('#c_config')[0].value)")>Kopieren</a>
+	<a class="btn" onclick="promptTemplate()">Laden</a>
 	`
-    jQuery('.rtfr-am-sim-template').html(elements);
+    $('.rtfr-am-sim-template').html(elements);
     $('#c_config')[0].value = template
 }
 
@@ -847,7 +939,10 @@ function idleTooltip(info) {
 function buildingRow(building, id) {
     const isEnough = simVillage.wood >= building.wood && simVillage.stone >= building.stone && simVillage.iron >= building.iron
     const isCEnough = simVillage.wood >= building.cWood && simVillage.stone >= building.cStone && simVillage.iron >= building.cIron
-    return `
+    const isPop = simVillage.pop_max() >= building.pop + simVillage.pop()
+    const isStorage = simVillage.storage_max()>=Math.max(building.wood,building.stone,building.iron)
+    const isCStorage = simVillage.storage_max()>=Math.max(building.cWood,building.cStone,building.cIron)
+    let row = `
     <tr id="main_buildrow_main">
             <td>
                 <a><img src="https://dsde.innogamescdn.com/asset/0e187870/graphic/buildings/mid/${building.name}1.png" class="bmain_list_img"></a>
@@ -858,9 +953,11 @@ function buildingRow(building, id) {
             <td class="cost_stone"><span class="icon header stone"> </span>${building.stone}</td>
             <td class="cost_iron"><span class="icon header iron"> </span>${building.iron}</td>
             <td><span class="icon header time"></span>${DSUtil.convertSecToTimeString(building.time)}</td>
-            <td><span class="icon header population"> </span>${building.pop}</td>
-            <td class="build_options">
-                    <a onclick="build('${building.id}',true)" class="btn ${(building.sumCost - building.cCost) / 64 >= 30 ? 'rtfr-btn-fix' : ''} ${isCEnough ? 'btn-bcr rtfr-green' : 'btn-btr'} float_right"
+            <td ${isPop ? '':'style="background: #ff00005e"'} ><span class="icon header population" > </span>${building.pop}</td>
+            <td class="build_options">`
+    if (isPop) {
+        if (isCStorage) {
+            row += `<a onclick="build('${building.id}',true)" class="btn ${(building.sumCost - building.cCost) / 64 >= 30 ? 'rtfr-btn-fix' : ''} ${isCEnough ? 'btn-bcr rtfr-green' : 'btn-btr'} float_right"
                     custom-tt="20% reduzierte Kosten:<br />
                         <strike><span class='icon header wood'> </span>${building.wood}</strike>
                         <span><span class='icon header wood'> </span>${building.cWood}</span><br/>
@@ -871,12 +968,23 @@ function buildingRow(building, id) {
                         <br />
                         <strong>Kostet: </strong> <span class='icon header premium'></span>30 - ${((building.sumCost - building.cCost) / 64).toFixed(2)}
 		` + (isCEnough ? '' : ('<br />' + idleTooltip(simIdle(building.cWood, building.cStone, building.cIron)))) + `
-					">-20%
-                    </a>
+					">-20%</a>`
+        } else {
+            row += `<a class="btn" disabled style="color:white;">Speicher<span class="icon header ressources"> </span></a>`
+        }
+        if (isStorage) {
+        row += `
                 <a class="btn ${building.sumCost <= 400 ? 'rtfr-btn-fix' : ''} ${isEnough ? 'btn-build rtfr-green' : 'btn-btr'}" onclick="build('${building.id}',false);"  
 				custom-tt="${isEnough ? '' : idleTooltip(simIdle(building.wood, building.stone, building.iron))}">Stufe ${building.lvl}</a>
+				`
+    } else {
+            row +='<a class="btn" disabled style="color:white;">Speicher<span class="icon header ressources"> </span></a>'
+        }
+    }
+    row += `
             </td>
         </tr>`
+    return row
 }
 
 function updateQueTable() {
@@ -1110,6 +1218,7 @@ function renderUI(body) {
 	        <div class="rtfr-am-sim-constr">
 				${body}
             </div>
+            </br>
 			<div class="rtfr-am-sim-template">
             </div>
         </div>
@@ -1229,3 +1338,26 @@ $('[id*=call_village_] td').each((i,e)=>{
 }
 )
 initTT()
+
+function copyTextToClipboard(text) {
+    var textArea = document.createElement("textarea");
+    textArea.style.position = 'fixed';
+    textArea.style.top = 0;
+    textArea.style.left = 0;
+    textArea.style.width = '2em';
+    textArea.style.height = '2em';
+    textArea.style.padding = 0;
+    textArea.style.border = 'none';
+    textArea.style.outline = 'none';
+    textArea.style.boxShadow = 'none';
+    textArea.style.background = 'transparent';
+    textArea.value = text;
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+        document.execCommand('copy');
+    } catch (err) {//console.log('Oops, unable to copy'); //optional
+    }
+    document.body.removeChild(textArea);
+}

@@ -12,6 +12,7 @@
 <body id="ds_body" class="desktop  scrollableMenu  has-pa" dir="ltr">
 	<div class="top_bar">
 		<div class="bg_left"> </div>
+		<table id="rtfr-header" style="background-color: brown;margin: 1em auto;"></table>
 		<div class="bg_right"> </div>
 	</div>
      <div class="questlog_placeholder">&nbsp;</div>
@@ -30,7 +31,7 @@
 			<td class="maincell" style="width: 850px;">
 				<div style="position:fixed;">
 					<div id="settings" class="questlog">
-						<div class="quest" id="new_quest" onclick="Questlines.showDialog(0, &#39;main-tab&#39;)" style="background-image: url(https://dsde.innogamescdn.com/asset/0e187870/graphic/icons/settings2.png);"></div>
+						<div class="quest" id="new_quest" onclick="revertLastStep()" title="lezte Aktion rückgängig machen" style="background-image: url(https://dsde.innogamescdn.com/asset/0e187870/graphic/index/arrow-left.png);background-position-y: bottom;"></div>
 					</div>
 				</div>
 				<!-- *********************** CONTENT BELOW ************************** -->
