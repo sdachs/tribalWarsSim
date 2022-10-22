@@ -550,6 +550,8 @@ function init() {
     startRes = {w:900,s:900,i:900}
     startRes.building = {...simVillage.building}
 
+    isStrict=false
+
     //setup(1.6,1,1,900,900,900,"{barracks:25,farm:30,garage:8,hide:9,iron:30,main:20,market:23,place:1,smith:20,snob:1,stable:20,stone:30,storage:30,wall:20,wood:30}");
     setup(1.25,2,1.35,900,900,900,"{main:1,barracks:0,stable:0,garage:0,snob:0,smith:0,market:0,wood:0,stone:0,iron:0,farm:1,storage:1,hide:0,wall:0}");
     //updateUI();
@@ -559,9 +561,11 @@ init()
 //Logic part
 function build(id, cheap) {
     //wait for free slot in que
-    if(simVillage.buildQue.length>4){
+    if(simVillage.buildQue.length>4&&!isStrict){
         let constrObj = simVillage.buildQue[0]
         idle(0,0,0,(constrObj.time / Math.pow(2, constrObj.timesReduced))-constrObj.timePassed)
+        build(id, cheap)
+        return
     }
     let constrObj = simVillage.constructionObjs[id]
     let enoughWood = simVillage.wood - (cheap ? constrObj.cWood : constrObj.wood)
@@ -585,7 +589,7 @@ function build(id, cheap) {
 
         updateUI()
     } else {
-        if(cheap?constrObj.isCStorage:constrObj.isStorage){
+        if(cheap?constrObj.isCStorage:constrObj.isStorage&&!isStrict){
             idle((cheap ? constrObj.cWood : constrObj.wood), (cheap ? constrObj.cStone : constrObj.stone), (cheap ? constrObj.cIron : constrObj.iron))
             build(id, cheap)
         }
@@ -814,6 +818,7 @@ function loadTemplate(unprocessedTemplate) {
     const t0 = performance.now();
     skipUIupdates=true
 
+    isStrict = unprocessedTemplate.includes('idle')
     let actions = unprocessedTemplate.split(';')
     for (let index = 0; index < actions.length - 1; index++) {
         let [task, vars] = actions[index].split('(')
@@ -850,6 +855,7 @@ function loadTemplate(unprocessedTemplate) {
     //alert("Erfolgreich geladen")
     skipUIupdates=false
     updateUI()
+    isStrict=false
     const t1 = performance.now();
     console.log(`Loading Template took ${t1 - t0} milliseconds.`);
 }
@@ -990,7 +996,7 @@ function updateConstruction() {
         renderUI(table)
     }
     //wait for free slot in que
-    if(simVillage.buildQue.length>4){
+    if(simVillage.buildQue.length>4&&!isStrict){
         let constrObj = simVillage.buildQue[0]
         idle(0,0,0,(constrObj.time / Math.pow(2, constrObj.timesReduced))-constrObj.timePassed)
     }
