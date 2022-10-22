@@ -524,7 +524,8 @@ function init() {
         iron_prod: (e)=>DSUtil.getResProduction(simVillage.building["iron"] + (e == undefined ? 0 : e), 'iron') / 3600,
         age: 0,
         ppUsed: 0,
-        bounty: []//use push() and shift()
+        bounty: [],//use push() and shift()
+        overflow: {wood: 0,stone: 0,iron:0,text:'Übergelaufen'}
     }
     buildQue = []
     template = ""
@@ -649,6 +650,7 @@ function idle(wood, stone, iron, idleTime) {
     }
 
     simVillage.age = time
+    checkForOverflow();
     updateUI()
 
 }
@@ -706,6 +708,7 @@ function simIdle(wood, stone, iron) {
     }
 
     return {
+        text: 'Speichervorschau:',
         possibleAt: time,
         wood: wood - diffWood,
         stone: stone - diffStone,
@@ -750,12 +753,30 @@ function cancel(id) {
     }
 }
 
+function checkForOverflow() {
+    const maxStorage = simVillage.storage_max();
+    if (simVillage.wood > maxStorage) {
+        simVillage.overflow.wood += simVillage.wood - maxStorage
+        simVillage.wood = maxStorage
+    }
+    if (simVillage.stone > maxStorage) {
+        simVillage.overflow .stone+= simVillage.stone - maxStorage
+        simVillage.stone = maxStorage
+    }
+    if (simVillage.iron > maxStorage) {
+        simVillage.overflow.iron += simVillage.iron - maxStorage
+        simVillage.iron = maxStorage
+    }
+}
+
 function claim() {
     template += "claim();"
     let bounty = simVillage.bounty.shift()
     simVillage.wood += bounty.wood
     simVillage.stone += bounty.stone
     simVillage.iron += bounty.iron
+
+    checkForOverflow();
 
     //update
     updateQueTable()
@@ -861,6 +882,7 @@ function setup(speed,baseProd,bonusProd,w,s,i,building){
     template = templ
 
     simVillage.nextbuilding = {...simVillage.building}
+    simVillage.overflow= {wood: 0,stone: 0,iron:0,text:'Übergelaufen'}
     simVillage.ppUsed = 0
     simVillage.age = 0
     simVillage.bounty = []
@@ -925,14 +947,15 @@ function updateConstruction() {
 }
 
 function idleTooltip(info) {
+    let maxStorage = simVillage.storage_max()
     return `
-			Speichervorschau:
+			${info.hasOwnProperty('text')?info.text:''}
 			<br />
-            <span><span class='icon header wood'> </span>${info.wood.toFixed(0)}</span><br/>
-            <span><span class='icon header stone'> </span>${info.stone.toFixed(0)}</span><br/>
-            <span><span class='icon header iron' > </span>${info.iron.toFixed(0)}</span><br />
+            <span><span class='icon header wood ${maxStorage<info.wood?"red":""}'> </span>${info.wood.toFixed(0)}</span><br/>
+            <span><span class='icon header stone ${maxStorage<info.stone?"red":""}'> </span>${info.stone.toFixed(0)}</span><br/>
+            <span><span class='icon header iron ${maxStorage<info.iron?"red":""}' > </span>${info.iron.toFixed(0)}</span><br />
             <br />
-            <strong>Rohstoffe um ${DSUtil.convertSecToTimeString(info.possibleAt)} </strong>
+            ${info.hasOwnProperty('possibleAt')?`<strong>Rohstoffe um ${DSUtil.convertSecToTimeString(info.possibleAt)} </strong>`:""}
 			`
 }
 
@@ -1158,7 +1181,7 @@ function updateVillageInfo(village) {
 			</tbody></table>
 		</h2>
 		${buildBountyTable(village)}
-		<table class="box smallPadding" cellspacing="1" style="empty-cells:show; float:left;">
+		<table class="box smallPadding" cellspacing="1" style="empty-cells:show; float:left;" custom-tt="${idleTooltip(simVillage.overflow)}">
 									<tbody><tr style="height: 20px;">
 										<th class="">
 											<span class="icon header time"> </span>
