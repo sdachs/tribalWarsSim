@@ -454,8 +454,8 @@ function updateUI() {
     }
         const t0 = performance.now();
         //update
-        updateSettings()
         updateConstruction()
+        updateSettings()
         updateQueTable()
         updateVillageInfo(simVillage)
         updateTemplate()
@@ -543,9 +543,10 @@ function init() {
         bounty: [],//use push() and shift()
         overflow: {wood: 0,stone: 0,iron:0,text:'Übergelaufen'}
     }
-    buildQue = []
-    template = ""
-    constructionObjs = {}
+    simVillage.buildQue = []
+    simVillage.template = ""
+    simVillage.simTemplate = ""
+    simVillage.constructionObjs = {}
     startRes = {w:900,s:900,i:900}
     startRes.building = {...simVillage.building}
 
@@ -557,13 +558,20 @@ init()
 
 //Logic part
 function build(id, cheap) {
-    let constrObj = constructionObjs[id]
+    //wait for free slot in que
+    if(simVillage.buildQue.length>4){
+        let constrObj = simVillage.buildQue[0]
+        idle(0,0,0,(constrObj.time / Math.pow(2, constrObj.timesReduced))-constrObj.timePassed)
+    }
+    let constrObj = simVillage.constructionObjs[id]
     let enoughWood = simVillage.wood - (cheap ? constrObj.cWood : constrObj.wood)
     let enoughStone = simVillage.stone - (cheap ? constrObj.cStone : constrObj.stone)
     let enoughIron = simVillage.iron - (cheap ? constrObj.cIron : constrObj.iron)
 
     if (enoughWood >= 0 && enoughStone >= 0 && enoughIron >= 0) {
-        template += "build(" + id + "," + cheap + ");"
+        const task = "build(" + id + "," + cheap + ");"
+        simVillage.template += task
+        simVillage.simTemplate += task
         simVillage.wood = enoughWood
         simVillage.stone = enoughStone
         simVillage.iron = enoughIron
@@ -571,13 +579,16 @@ function build(id, cheap) {
             simVillage.ppUsed += 30
             constrObj.cheap = true
         }
-        buildQue.push(constrObj)
+        simVillage.buildQue.push(constrObj)
         //let[type,lvl,hqlvl] = id.split('|')
         simVillage.nextbuilding[constrObj.name] = parseInt(constrObj.lvl)
 
         updateUI()
     } else {
-        idle((cheap ? constrObj.cWood : constrObj.wood), (cheap ? constrObj.cStone : constrObj.stone), (cheap ? constrObj.cIron : constrObj.iron))
+        if(cheap?constrObj.isCStorage:constrObj.isStorage){
+            idle((cheap ? constrObj.cWood : constrObj.wood), (cheap ? constrObj.cStone : constrObj.stone), (cheap ? constrObj.cIron : constrObj.iron))
+            build(id, cheap)
+        }
     }
 }
 
@@ -587,7 +598,7 @@ function idle(wood, stone, iron, idleTime) {
     iron=parseFloat(iron);
     idleTime=parseFloat(idleTime);
 
-    template += "idle(" + wood + "," + stone + "," + iron + "," + idleTime + ");"
+    simVillage.template += "idle(" + wood + "," + stone + "," + iron + "," + idleTime + ");"
     let time = simVillage.age
     let diffWood = wood - simVillage.wood
     let diffStone = stone - simVillage.stone
@@ -599,8 +610,8 @@ function idle(wood, stone, iron, idleTime) {
 
     while (isIdle() ? (Math.max(diffWood, diffStone, diffIron) > 0) : (time < (idleTime + simVillage.age))) {
         let waitingTime = (isIdle() ? (Math.max(diffWood / simVillage.wood_prod(), diffStone / simVillage.stone_prod(), diffIron / simVillage.iron_prod())) : idleTime)
-        if (buildQue.length > 0) {
-            let constrObj = buildQue[0]
+        if (simVillage.buildQue.length > 0) {
+            let constrObj = simVillage.buildQue[0]
             let timeLeft = (constrObj.time / Math.pow(2, constrObj.timesReduced)) - constrObj.timePassed
             if (waitingTime >= timeLeft) {
                 //calc res for timeLeft of Building in que
@@ -619,7 +630,7 @@ function idle(wood, stone, iron, idleTime) {
                 simVillage.building[constrObj.name] = parseInt(constrObj.lvl)
                 constrObj.timePassed += timeLeft
 
-                let finishedBuilding = buildQue.shift()
+                let finishedBuilding = simVillage.buildQue.shift()
                 simVillage.bounty.push({
                     wood: Math.max(150, Math.min((0.1*finishedBuilding.wood), 2000)),
                     stone: Math.max(150, Math.min((0.1*finishedBuilding.stone), 2000)),
@@ -684,8 +695,8 @@ function simIdle(wood, stone, iron) {
 
     while (Math.max(diffWood, diffStone, diffIron) > 0) {
         let waitingTime = Math.max(diffWood / simVillage.wood_prod(woodFix), diffStone / simVillage.stone_prod(stoneFix), diffIron / simVillage.iron_prod(ironFix))
-        if (buildQue.length > 0 + queFix) {
-            let constrObj = buildQue[0 + queFix]
+        if (simVillage.buildQue.length > 0 + queFix) {
+            let constrObj = simVillage.buildQue[0 + queFix]
             let timeLeft = (constrObj.time / Math.pow(2, constrObj.timesReduced)) - constrObj.timePassed
             if (waitingTime >= timeLeft) {
                 //calc res for timeLeft of Building in que
@@ -733,8 +744,8 @@ function simIdle(wood, stone, iron) {
 }
 
 function reduceTime(id) {
-    template += "reduceTime(" + id + ");"
-    buildQue.find(e=>e.id === id).timesReduced += 1
+    simVillage.template += "reduceTime(" + id + ");"
+    simVillage.buildQue.find(e=>e.id === id).timesReduced += 1
     simVillage.ppUsed += 10
 
     updateUI()
@@ -743,7 +754,7 @@ function reduceTime(id) {
 function cancel(id) {
     let [type,lvl,hqlvl] = id.split('|')
     //check for same building more than one time in que
-    let matchingType = buildQue.filter(e=>e.id.includes(type))
+    let matchingType = simVillage.buildQue.filter(e=>e.id.includes(type))
     if (matchingType.length > 1){
         matchingType = matchingType.sort((a,b)=>a.lvl<b.lvl)
         lvl = matchingType[0].lvl
@@ -751,9 +762,9 @@ function cancel(id) {
         id = (type + '|' + (parseInt(lvl)) + '|' + hqlvl)
     }
     //remove building from que and template
-    let index = buildQue.findIndex(e=>e.id === id)
+    let index = simVillage.buildQue.findIndex(e=>e.id === id)
     if (index > -1) {
-        let constrObj = buildQue[index]
+        let constrObj = simVillage.buildQue[index]
         simVillage.ppUsed -= (10 * constrObj.timesReduced) + (constrObj.cheap ? 30 : 0)
         simVillage.wood += (constrObj.cheap ? constrObj.cWood : constrObj.wood)
         simVillage.stone += (constrObj.cheap ? constrObj.cStone : constrObj.stone)
@@ -761,8 +772,9 @@ function cancel(id) {
         simVillage.nextbuilding[constrObj.name] = parseInt(constrObj.lvl - 1)
         simVillage.age -= constrObj.timePassed
 
-        buildQue.splice(index, 1);
-        template  = template.replace("build("+id+","+constrObj.cheap+");",'')
+        simVillage.buildQue.splice(index, 1);
+        simVillage.template  = simVillage.template.replace("build("+id+","+constrObj.cheap+");",'')
+        simVillage.simTemplate = simVillage.template.replace("build("+id+","+constrObj.cheap+");",'')
         //remove element
 
         updateUI()
@@ -786,7 +798,8 @@ function checkForOverflow() {
 }
 
 function claim() {
-    template += "claim();"
+    simVillage.template += "claim();"
+    simVillage.simTemplate += "claim();"
     let bounty = simVillage.bounty.shift()
     simVillage.wood += bounty.wood
     simVillage.stone += bounty.stone
@@ -898,15 +911,16 @@ function setup(speed,baseProd,bonusProd,w,s,i,building){
     startRes.building = {...simVillage.building}
 
     let templ = "setup("+DSUtil.speed+"|"+DSUtil.mineBaseProd+"|"+DSUtil.bonusProd+"|"+simVillage.wood+"|"+simVillage.stone+"|"+simVillage.iron+"|"+JSON.stringify(simVillage.building).replaceAll('"','')+");"
-    template = templ
+    simVillage.template = templ
+    simVillage.simTemplate = templ
 
     simVillage.nextbuilding = {...simVillage.building}
     simVillage.overflow= {wood: 0,stone: 0,iron:0,text:'Übergelaufen'}
     simVillage.ppUsed = 0
     simVillage.age = 0
     simVillage.bounty = []
-    buildQue = []
-    constructionObjs = {}
+    simVillage.buildQue = []
+    simVillage.constructionObjs = {}
 
     updateUI()
 }
@@ -926,38 +940,44 @@ function parseBuilding(text) {
 function updateTemplate() {
     const elements = `
 	<h2>Configuration<h2>
-	<input id="c_config" style="width: 81%;" disabled>
-	<a class="btn"onclick="copyTextToClipboard($('#c_config')[0].value)")>Kopieren</a>
+	<input id="c_config" style="width: 76%;" disabled>
+	<a class="btn"onclick="copyTextToClipboard($('#c_config')[0].value)")>Conf Kopieren</a>
 	<a class="btn" onclick="promptTemplate()">Laden</a>
+	<input id="c_s_config" style="width: 81%;" disabled title="Setting unabhängige Konfiguration">
+	<a class="btn"onclick="copyTextToClipboard($('#c_s_config')[0].value)") title="Setting unabhängige Konfiguration">SConf Kopieren</a>
 	`
     $('.rtfr-am-sim-template').html(elements);
-    $('#c_config')[0].value = template
+    $('#c_config')[0].value = simVillage.template
+    $('#c_s_config')[0].value = simVillage.simTemplate
 }
 
 
 
 function updateConstruction() {
     let constructionRows = ""
-    if (buildQue.length < 5) {
+    if (simVillage.buildQue.length < 5) {
         let hqlvl = simVillage.nextbuilding["main"]
+        simVillage.constructionObjs = {}
         for (let building of Object.keys(simVillage.nextbuilding)) {
             //Construction
             let lvl = simVillage.nextbuilding[building]
             if (parseInt(DSUtil.buildConf[building].max_level) > parseInt(lvl) && DSUtil.buildingReqirementsMet(simVillage.nextbuilding, building)) {
                 let constrObj = DSUtil.getBuildingObj(building, parseInt(lvl) + 1, hqlvl)
-                constructionObjs[constrObj.id] = constrObj
+                simVillage.constructionObjs[constrObj.id] = constrObj
                 if(!skipUIupdates) {
                     constructionRows += buildingRow(constrObj)
                 }
             }
         }
     } else {
-        constructionRows += `<tr>
+        if(!skipUIupdates) {
+            constructionRows += `<tr>
 		                <td colspan="7;">Es können nur 5 Bauaufträge in der Bauwarteschlange sein</td>
 		            </tr>`
+        }
     }
     if(!skipUIupdates) {
-    const table = `<table id="c_construction" class="vis nowrap rtfr-table" style="width: 100%;">
+        const table = `<table id="c_construction" class="vis nowrap rtfr-table" style="width: 100%;">
 		        <tbody>
 		            <tr>
 		                <th style="width: 23%">Gebäude</th>
@@ -967,7 +987,12 @@ function updateConstruction() {
 		            ${constructionRows}
 		        </tbody>
 			    </table>`
-    renderUI(table)
+        renderUI(table)
+    }
+    //wait for free slot in que
+    if(simVillage.buildQue.length>4){
+        let constrObj = simVillage.buildQue[0]
+        idle(0,0,0,(constrObj.time / Math.pow(2, constrObj.timesReduced))-constrObj.timePassed)
     }
 }
 
@@ -1033,11 +1058,11 @@ function buildingRow(building, id) {
 function updateQueTable() {
     let queRows = ""
     let nextFin = simVillage.age
-    for (let index = 0; index < buildQue.length; index++) {
-        let constrObj = buildQue[index]
+    for (let index = 0; index < simVillage.buildQue.length; index++) {
+        let constrObj = simVillage.buildQue[index]
         let timeLeft = constrObj.time / Math.pow(2, constrObj.timesReduced)
         let timeSaved = constrObj.time - timeLeft
-        nextFin += timeLeft
+        nextFin += timeLeft-constrObj.timePassed
         queRows += `<tr class="lit nodrag buildorder_main">
 		<td class="lit-item">
 			<img src="https://dsde.innogamescdn.com/asset/0e187870/graphic/buildings/mid/${constrObj.name}1.png" class="bmain_list_img">
@@ -1045,7 +1070,7 @@ function updateQueTable() {
 			<span style="font-size: 0.9em">Stufe ${constrObj.lvl}</span>
 		</td>
 		<td class="nowrap lit-item">
-			<span class="" >${DSUtil.convertSecToTimeString(timeLeft)}</span>
+			<span class="" >${DSUtil.convertSecToTimeString(timeLeft-constrObj.timePassed)}</span>
 		</td>
 		<td class="lit-item">
 			<a class="order_feature btn btn-btr" onclick="reduceTime('${constrObj.id}');" style="float: left;" 
@@ -1073,7 +1098,7 @@ function updateQueTable() {
     }
     let content = `
     <table id="build_queue" class="vis rtfr-table" style="width: 100%">
-	<tbody id="buildqueue" class="ui-sortable">
+	<tbody id="buildQueue" class="ui-sortable">
 	<tr>
 		<th style="width: 23%">Konstruktion</th>
 		<th>Dauer</th>
@@ -1085,7 +1110,7 @@ function updateQueTable() {
 	</tbody>
 	</table>
 `
-    jQuery('.rtfr-am-sim-que').html(buildQue.length > 0 ? content : '');
+    jQuery('.rtfr-am-sim-que').html(simVillage.buildQue.length > 0 ? content : '');
 }
 
 function buildingTempalteTable(content) {
