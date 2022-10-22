@@ -533,7 +533,7 @@ function init() {
     startRes.building = {...simVillage.building}
 
     //setup(1.6,1,1,900,900,900,"{barracks:25,farm:30,garage:8,hide:9,iron:30,main:20,market:23,place:1,smith:20,snob:1,stable:20,stone:30,storage:30,wall:20,wood:30}");
-    setup(1.6,2,1.35,900,900,900,"{main:1,barracks:0,stable:0,garage:0,snob:0,smith:0,market:0,wood:0,stone:0,iron:0,farm:1,storage:1,hide:0,wall:0}");
+    setup(1.25,2,1.35,900,900,900,"{main:1,barracks:0,stable:0,garage:0,snob:0,smith:0,market:0,wood:0,stone:0,iron:0,farm:1,storage:1,hide:0,wall:0}");
     //updateUI();
 }
 init()
