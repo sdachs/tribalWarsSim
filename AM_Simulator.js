@@ -117,6 +117,14 @@ DSUtil = {
         building.cStone = Math.round(building.stone * 0.8)
         building.cIron = Math.round(building.iron * 0.8)
         building.cCost = (building.cWood + building.cStone + building.cIron)
+
+        //simVillage dependent Calculations
+        building.isEnough = simVillage.wood >= building.wood && simVillage.stone >= building.stone && simVillage.iron >= building.iron
+        building.isCEnough = simVillage.wood >= building.cWood && simVillage.stone >= building.cStone && simVillage.iron >= building.cIron
+        building.isPop = simVillage.pop_max() >= building.pop + simVillage.pop()
+        building.isStorage = simVillage.storage_max()>=Math.max(building.wood,building.stone,building.iron)
+        building.isCStorage = simVillage.storage_max()>=Math.max(building.cWood,building.cStone,building.cIron)
+
         return building
     },
     buildingReqirementsMet(buildings, type) {
@@ -438,14 +446,22 @@ DSUtil = {
 
 }
 
+skipUIupdates = false
 function updateUI() {
-    //update
-    updateSettings()
-    updateConstruction()
-    updateQueTable()
-    updateVillageInfo(simVillage)
-    updateTemplate()
-    initTT()
+    if(skipUIupdates) {
+        updateConstruction()
+        return
+    }
+        const t0 = performance.now();
+        //update
+        updateSettings()
+        updateConstruction()
+        updateQueTable()
+        updateVillageInfo(simVillage)
+        updateTemplate()
+        initTT()
+        const t1 = performance.now();
+        console.log(`Updating UI took ${t1 - t0} milliseconds.`);
 }
 
 function init() {
@@ -776,17 +792,15 @@ function claim() {
     simVillage.stone += bounty.stone
     simVillage.iron += bounty.iron
 
-    checkForOverflow();
+    checkForOverflow()
 
-    //update
-    updateQueTable()
-    updateVillageInfo(simVillage)
-    updateConstruction()
-    updateTemplate()
-    initTT()
+    updateUI()
 }
 
 function loadTemplate(unprocessedTemplate) {
+    const t0 = performance.now();
+    skipUIupdates=true
+
     let actions = unprocessedTemplate.split(';')
     for (let index = 0; index < actions.length - 1; index++) {
         let [task, vars] = actions[index].split('(')
@@ -821,7 +835,12 @@ function loadTemplate(unprocessedTemplate) {
         }
     }
     //alert("Erfolgreich geladen")
+    skipUIupdates=false
+    updateUI()
+    const t1 = performance.now();
+    console.log(`Loading Template took ${t1 - t0} milliseconds.`);
 }
+//setup(1.25|2|1.35|900|900|900|{main:1,barracks:0,stable:0,garage:0,snob:0,smith:0,market:0,wood:0,stone:0,iron:0,farm:1,storage:1,hide:0,wall:0});build(main|2|1,false);build(wood|1|2,false);build(stone|1|2,false);build(wood|2|2,false);build(stone|2|2,false);idle(0,0,0,118);build(farm|2|2,false);build(iron|1|2,false);build(iron|2|2,false);build(stone|3|2,false);build(iron|3|2,false);idle(0,0,0,305);build(farm|3|2,false);idle(133,101,76,NaN);build(farm|4|2,false);idle(133,101,76,NaN);build(farm|5|2,false);idle(133,101,76,NaN);idle(167,160,107,NaN);build(farm|6|2,false);idle(133,101,76,NaN);idle(217,212,138,NaN);build(farm|7|2,false);idle(133,101,76,NaN);idle(282,279,178,NaN);build(farm|8|2,false);idle(133,101,76,NaN);idle(367,369,230,NaN);build(farm|9|2,false);idle(133,101,76,NaN);idle(147,135,133,NaN);build(iron|4|2,false);idle(78,98,62,NaN);idle(184,172,165,NaN);build(iron|5|2,false);idle(78,98,62,NaN);idle(231,219,205,NaN);build(iron|6|2,false);idle(78,98,62,NaN);idle(289,279,254,NaN);build(iron|7|2,false);idle(78,98,62,NaN);idle(362,356,316,NaN);build(iron|8|2,false);idle(78,98,62,NaN);idle(453,454,391,NaN);build(iron|9|2,false);idle(78,98,62,NaN);build(wood|3|2,false);idle(143,130,111,NaN);idle(567,579,485,NaN);build(iron|10|2,false);idle(98,124,77,NaN);build(wood|4|2,false);idle(143,130,111,NaN);idle(710,738,602,NaN);build(iron|11|2,false);idle(122,159,96,NaN);build(wood|5|2,false);idle(143,130,111,NaN);idle(889,941,746,NaN);build(iron|12|2,false);idle(153,202,120,NaN);build(wood|6|2,false);idle(143,130,111,NaN);
 
 function promptTemplate() {
     let unprocessedTemplate = prompt("Configuration hier einfügen")//$('#c_config')[0].value
@@ -915,17 +934,21 @@ function updateTemplate() {
     $('#c_config')[0].value = template
 }
 
+
+
 function updateConstruction() {
     let constructionRows = ""
     if (buildQue.length < 5) {
         let hqlvl = simVillage.nextbuilding["main"]
         for (let building of Object.keys(simVillage.nextbuilding)) {
-            //Construcktion
+            //Construction
             let lvl = simVillage.nextbuilding[building]
             if (parseInt(DSUtil.buildConf[building].max_level) > parseInt(lvl) && DSUtil.buildingReqirementsMet(simVillage.nextbuilding, building)) {
                 let constrObj = DSUtil.getBuildingObj(building, parseInt(lvl) + 1, hqlvl)
                 constructionObjs[constrObj.id] = constrObj
-                constructionRows += buildingRow(constrObj)
+                if(!skipUIupdates) {
+                    constructionRows += buildingRow(constrObj)
+                }
             }
         }
     } else {
@@ -933,6 +956,7 @@ function updateConstruction() {
 		                <td colspan="7;">Es können nur 5 Bauaufträge in der Bauwarteschlange sein</td>
 		            </tr>`
     }
+    if(!skipUIupdates) {
     const table = `<table id="c_construction" class="vis nowrap rtfr-table" style="width: 100%;">
 		        <tbody>
 		            <tr>
@@ -944,6 +968,7 @@ function updateConstruction() {
 		        </tbody>
 			    </table>`
     renderUI(table)
+    }
 }
 
 function idleTooltip(info) {
@@ -960,11 +985,6 @@ function idleTooltip(info) {
 }
 
 function buildingRow(building, id) {
-    const isEnough = simVillage.wood >= building.wood && simVillage.stone >= building.stone && simVillage.iron >= building.iron
-    const isCEnough = simVillage.wood >= building.cWood && simVillage.stone >= building.cStone && simVillage.iron >= building.cIron
-    const isPop = simVillage.pop_max() >= building.pop + simVillage.pop()
-    const isStorage = simVillage.storage_max()>=Math.max(building.wood,building.stone,building.iron)
-    const isCStorage = simVillage.storage_max()>=Math.max(building.cWood,building.cStone,building.cIron)
     let row = `
     <tr id="main_buildrow_main">
             <td>
@@ -976,11 +996,11 @@ function buildingRow(building, id) {
             <td class="cost_stone"><span class="icon header stone"> </span>${building.stone}</td>
             <td class="cost_iron"><span class="icon header iron"> </span>${building.iron}</td>
             <td><span class="icon header time"></span>${DSUtil.convertSecToTimeString(building.time)}</td>
-            <td ${isPop ? '':'style="background: #ff00005e"'} ><span class="icon header population" > </span>${building.pop}</td>
+            <td ${building.isPop ? '':'style="background: #ff00005e"'} ><span class="icon header population" > </span>${building.pop}</td>
             <td class="build_options">`
-    if (isPop) {
-        if (isCStorage) {
-            row += `<a onclick="build('${building.id}',true)" class="btn ${(building.sumCost - building.cCost) / 64 >= 30 ? 'rtfr-btn-fix' : ''} ${isCEnough ? 'btn-bcr rtfr-green' : 'btn-btr'} float_right"
+    if (building.isPop) {
+        if (building.isCStorage) {
+            row += `<a onclick="build('${building.id}',true)" class="btn ${(building.sumCost - building.cCost) / 64 >= 30 ? 'rtfr-btn-fix' : ''} ${building.isCEnough ? 'btn-bcr rtfr-green' : 'btn-btr'} float_right"
                     custom-tt="20% reduzierte Kosten:<br />
                         <strike><span class='icon header wood'> </span>${building.wood}</strike>
                         <span><span class='icon header wood'> </span>${building.cWood}</span><br/>
@@ -990,15 +1010,15 @@ function buildingRow(building, id) {
                         <span><span class='icon header iron' > </span>${building.cIron}</span><br />
                         <br />
                         <strong>Kostet: </strong> <span class='icon header premium'></span>30 - ${((building.sumCost - building.cCost) / 64).toFixed(2)}
-		` + (isCEnough ? '' : ('<br />' + idleTooltip(simIdle(building.cWood, building.cStone, building.cIron)))) + `
+		` + (building.isCEnough ? '' : ('<br />' + idleTooltip(simIdle(building.cWood, building.cStone, building.cIron)))) + `
 					">-20%</a>`
         } else {
             row += `<a class="btn" disabled style="color:white;">Speicher<span class="icon header ressources"> </span></a>`
         }
-        if (isStorage) {
+        if (building.isStorage) {
         row += `
-                <a class="btn ${building.sumCost <= 400 ? 'rtfr-btn-fix' : ''} ${isEnough ? 'btn-build rtfr-green' : 'btn-btr'}" onclick="build('${building.id}',false);"  
-				custom-tt="${isEnough ? '' : idleTooltip(simIdle(building.wood, building.stone, building.iron))}">Stufe ${building.lvl}</a>
+                <a class="btn ${building.sumCost <= 400 ? 'rtfr-btn-fix' : ''} ${building.isEnough ? 'btn-build rtfr-green' : 'btn-btr'}" onclick="build('${building.id}',false);"  
+				custom-tt="${building.isEnough ? '' : idleTooltip(simIdle(building.wood, building.stone, building.iron))}">Stufe ${building.lvl}</a>
 				`
     } else {
             row +='<a class="btn" disabled style="color:white;">Speicher<span class="icon header ressources"> </span></a>'
@@ -1036,7 +1056,7 @@ function updateQueTable() {
 			</a>
 		</td>
 		<td class="lit-item">um ${DSUtil.convertSecToTimeString(nextFin)}  
-			<a class="btn btn-xmas-steel" onclick="idle(0,0,0,${constrObj.time - constrObj.timePassed});">Fertig</a>
+			<a class="btn btn-xmas-steel" onclick="idle(0,0,0,${nextFin - simVillage.age});">Fertig</a>
 		</td>
 		<td class="lit-item">
 			<a class="btn btn-cancel" onclick="cancel('${constrObj.id}');">Abbrechen</a>
