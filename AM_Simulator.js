@@ -558,6 +558,73 @@ function init() {
 }
 init()
 
+gen=0
+combinations=0
+snapshots = [simVillage]
+
+function deepClone(original){
+    let copy = JSON.parse(JSON.stringify(original));
+    copy.pop= ()=>DSUtil.popUsedVillage(simVillage.nextbuilding)
+    copy.points= ()=>DSUtil.pointsVillage(simVillage.building)
+    copy.pop_max= ()=>DSUtil.getFarm(simVillage.building["farm"])
+    copy.storage_max= ()=>DSUtil.getStorage(simVillage.building["storage"])
+    copy.wood_prod= (e)=>DSUtil.getResProduction(simVillage.building["wood"] + (e == undefined ? 0 : e), 'wood') / 3600
+    copy.stone_prod= (e)=>DSUtil.getResProduction(simVillage.building["stone"] + (e == undefined ? 0 : e), 'stone') / 3600
+    copy.iron_prod= (e)=>DSUtil.getResProduction(simVillage.building["iron"] + (e == undefined ? 0 : e), 'iron') / 3600
+    return copy
+}
+
+function sim() {
+    const t0 = performance.now();
+    skipUIupdates=true
+
+    let nextGen = []
+    for (let snap of snapshots) {
+        for (let id of Object.keys(snap.constructionObjs)) {
+            const constrObj = snap.constructionObjs[id]
+            if(constrObj.isStorage&&constrObj.isPop) {
+                simVillage = deepClone(snap)
+
+                build(id, false);
+                nextGen.push(deepClone(simVillage))
+                combinations++
+            }
+        }
+    }
+    snapshots = nextGen
+    gen++
+
+
+
+    skipUIupdates=false
+    updateUI()
+    const t1 = performance.now();
+    console.log('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+    console.log(`Simulating took ${t1 - t0} milliseconds.`);
+    console.log("Gen: "+gen+ " Count: "+combinations)
+    console.log("Size: "+snapshots.length+" Storage: "+(new Blob([JSON.stringify(snapshots)]).size * 0.00000095367432).toFixed(3)+ " MB" )
+    console.log('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+}
+
+function download() {
+    $('#ds_body').after(`<button class="save-file">Save Snapshots</button>`)
+    const saveBtn = document.querySelector('button.save-file')
+    let name = 'snapshots'
+
+    saveBtn.addEventListener('click', function(){
+
+        var tempLink = document.createElement("a")
+        var taBlob = new Blob([JSON.stringify(snapshots) ], {type: 'text/plain'})
+
+        tempLink.setAttribute('href', URL.createObjectURL(taBlob))
+        tempLink.setAttribute('download', `${name.toLowerCase()}.txt`)
+        tempLink.click();
+
+        URL.revokeObjectURL(tempLink.href);
+    })
+}
+download()
+
 //Logic part
 function build(id, cheap) {
     //wait for free slot in que
@@ -640,7 +707,7 @@ function idle(wood, stone, iron, idleTime) {
                     stone: Math.max(150, Math.min((0.1*finishedBuilding.stone), 2000)),
                     iron: Math.max(100, Math.min((0.1*finishedBuilding.iron), 2000))
                 })
-                console.log(finishedBuilding)
+                //console.log(finishedBuilding)
                 //TODO template
 
             } else {
