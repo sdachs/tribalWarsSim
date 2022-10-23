@@ -580,11 +580,33 @@ function sim() {
 
     let nextGen = []
     for (let snap of snapshots) {
-        for (let id of Object.keys(snap.constructionObjs)) {
+
+        let farm = null
+        let ids = Object.keys(snap.constructionObjs)
+        for (let id of ids) {
+            const constrObj = snap.constructionObjs[id]
+
+            if(constrObj.name === 'farm'){
+                farm = {...snap.constructionObjs};
+                continue
+            }
+
+            const storangeAndPop = !constrObj.isStorage||!constrObj.isPop
+            const notImportant = !constrObj.name.match(/main|wood|stone|iron|storage/gm)
+            if(storangeAndPop || notImportant) {
+                delete snap.constructionObjs[id]
+            }
+
+        }
+        if(snap.constructionObjs.length==0&&farm!=null){
+            snap.constructionObjs[farm.id] = farm
+        }
+
+        let keys = Object.keys(snap.constructionObjs)
+        for (let id of keys) {
             const constrObj = snap.constructionObjs[id]
             if(constrObj.isStorage&&constrObj.isPop) {
                 simVillage = deepClone(snap)
-
                 build(id, false);
                 nextGen.push(deepClone(simVillage))
                 combinations++
@@ -602,7 +624,8 @@ function sim() {
     console.log('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
     console.log(`Simulating took ${t1 - t0} milliseconds.`);
     console.log("Gen: "+gen+ " Count: "+combinations)
-    console.log("Size: "+snapshots.length+" Storage: "+(new Blob([JSON.stringify(snapshots)]).size * 0.00000095367432).toFixed(3)+ " MB" )
+    console.log("Size: "+snapshots.length+" Storage: "+ (new Blob([JSON.stringify(snapshots[0])]).size * 0.00000095367432 * snapshots.length).toFixed(3) +" MB" )
+    //console.log("Size: "+snapshots.length+" Storage: "+(new Blob([JSON.stringify(snapshots)]).size * 0.00000095367432).toFixed(3)+ " MB" )
     console.log('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
 }
 
@@ -623,7 +646,6 @@ function download() {
         URL.revokeObjectURL(tempLink.href);
     })
 }
-download()
 
 //Logic part
 function build(id, cheap) {
