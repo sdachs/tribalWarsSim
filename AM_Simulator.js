@@ -607,6 +607,7 @@ function sim() {
             const constrObj = snap.constructionObjs[id]
             if(constrObj.isStorage&&constrObj.isPop) {
                 simVillage = deepClone(snap)
+                console.log(simVillage.simTemplate+("build("+id+",false);"))
                 build(id, false);
                 nextGen.push(deepClone(simVillage))
                 combinations++
@@ -615,8 +616,6 @@ function sim() {
     }
     snapshots = nextGen
     gen++
-
-
 
     skipUIupdates=false
     updateUI()
@@ -651,8 +650,9 @@ function download() {
 function build(id, cheap) {
     //wait for free slot in que
     if(simVillage.buildQue.length>4&&!isStrict){
-        let constrObj = simVillage.buildQue[0]
-        idle(0,0,0,(constrObj.time / Math.pow(2, constrObj.timesReduced))-constrObj.timePassed)
+        const conObj = simVillage.buildQue[0]
+        const idleTime = (conObj.time / Math.pow(2, conObj.timesReduced))-conObj.timePassed
+        idle(0,0,0,idleTime)
         build(id, cheap)
         return
     }
@@ -686,6 +686,15 @@ function build(id, cheap) {
 }
 
 function idle(wood, stone, iron, idleTime) {
+    function isIdle() {
+        return idleTime == undefined || isNaN(idleTime);
+    }
+
+    if(!isIdle()&&idleTime<=0) {
+        debugger
+        //loadTemplate('setup(1.25|2|1.35|900|900|900|{main:1,barracks:0,stable:0,garage:0,snob:0,smith:0,market:0,wood:0,stone:0,iron:0,farm:
+    }
+
     wood=parseFloat(wood);
     stone=parseFloat(stone);
     iron=parseFloat(iron);
@@ -697,9 +706,7 @@ function idle(wood, stone, iron, idleTime) {
     let diffStone = stone - simVillage.stone
     let diffIron = iron - simVillage.iron
 
-    function isIdle() {
-        return idleTime == undefined || isNaN(idleTime);
-    }
+
 
     while (isIdle() ? (Math.max(diffWood, diffStone, diffIron) > 0) : (time < (idleTime + simVillage.age))) {
         let waitingTime = (isIdle() ? (Math.max(diffWood / simVillage.wood_prod(), diffStone / simVillage.stone_prod(), diffIron / simVillage.iron_prod())) : idleTime)
@@ -746,7 +753,7 @@ function idle(wood, stone, iron, idleTime) {
                 time += waitingTime
 
                 //progress Building 
-                constrObj.timePassed += time - simVillage.age
+                constrObj.timePassed += waitingTime
             }
         } else {
             //calc res for waitingTime
@@ -1086,8 +1093,9 @@ function updateConstruction() {
     }
     //wait for free slot in que
     if(simVillage.buildQue.length>4&&!isStrict){
-        let constrObj = simVillage.buildQue[0]
-        idle(0,0,0,(constrObj.time / Math.pow(2, constrObj.timesReduced))-constrObj.timePassed)
+        const constrObj = simVillage.buildQue[0]
+        const idleTime = (constrObj.time / Math.pow(2, constrObj.timesReduced))-constrObj.timePassed
+        idle(0,0,0,idleTime)
     }
 }
 
