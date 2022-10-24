@@ -541,7 +541,11 @@ function init() {
         age: 0,
         ppUsed: 0,
         bounty: [],//use push() and shift()
-        overflow: {wood: 0,stone: 0,iron:0,text:'Übergelaufen'}
+        overflow: {wood: 0,stone: 0,iron:0,text:'Übergelaufen'},
+        rating: 0,
+        usedWood: 0,
+        usedStone: 0,
+        usedIron: 0
     }
     simVillage.buildQue = []
     simVillage.template = ""
@@ -549,6 +553,8 @@ function init() {
     simVillage.constructionObjs = {}
     startRes = {w:900,s:900,i:900}
     startRes.building = {...simVillage.building}
+
+    goalVillage = null;
 
     isStrict=false
 
@@ -574,6 +580,77 @@ function deepClone(original){
     return copy
 }
 
+weights = {
+    r_prod_factor: 1,
+    r_overflow_factor: 1,
+    r_age_factor: 1,
+    r_value_factor: 1,
+}
+function rate(){
+    //const prodRating = weights.r_prod_factor*(simVillage.wood_prod() + simVillage.stone_prod() + simVillage.iron_prod())
+    //const overflowRating = weights.r_overflow_factor*(-(simVillage.overflow.wood+simVillage.overflow.stone+simVillage.overflow.iron))
+    //const ageRating = weights.r_age_factor*(simVillage.age)
+    const valueRating = weights.r_value_factor*(simVillage.wood+simVillage.stone+simVillage.iron)/simVillage.age
+    simVillage.rating =  valueRating
+}
+
+
+function setGoalVillage(){
+    goalVillage = {
+        main: 20,
+        barracks: 0,
+        stable: 0,
+        garage: 0,
+        snob: 0,
+        smith: 0,
+        market: 0,
+        wood: 30,
+        stone: 30,
+        iron: 30,
+        farm: 0,
+        storage: 30,
+        hide: 0,
+        wall: 0
+    }
+    const neededPop= DSUtil.popUsedVillage(goalVillage)
+    let farmLvl = 0
+    while (DSUtil.getFarm(farmLvl)<neededPop){
+        farmLvl++
+    }
+    goalVillage.farm = farmLvl
+}
+
+function purgeSnapshots(popGoal) {
+    snapshots.sort((a,b)=>b.rating-a.rating)
+    snapshots = snapshots.slice(0,(snapshots.length<popGoal?snapshots.length:popGoal))
+}
+
+function filterConstruction(snap) {
+    let farm = null
+    let ids = Object.keys(snap.constructionObjs)
+    for (let id of ids) {
+        const constrObj = snap.constructionObjs[id]
+
+        if (constrObj.name === 'farm') {
+            farm = {...snap.constructionObjs};
+            continue
+        }
+
+        const storageAndPop = !constrObj.isStorage || !constrObj.isPop
+        const notImportant = !constrObj.name.match(/main|wood|stone|iron|storage/gm)
+        if (storageAndPop || notImportant) {
+            delete snap.constructionObjs[id]
+        }
+
+    }
+    let consObjLength = Object.keys(snap.constructionObjs).length
+    if (consObjLength == 0 && farm != null) {
+        snap.constructionObjs[farm.id] = farm
+        consObjLength++
+    }
+    return consObjLength
+}
+
 function sim() {
     const t0 = performance.now();
     skipUIupdates=true
@@ -581,57 +658,72 @@ function sim() {
     let nextGen = []
     for (let snap of snapshots) {
 
-        let farm = null
-        let ids = Object.keys(snap.constructionObjs)
-        for (let id of ids) {
-            const constrObj = snap.constructionObjs[id]
-
-            if(constrObj.name === 'farm'){
-                farm = {...snap.constructionObjs};
-                continue
-            }
-
-            const storangeAndPop = !constrObj.isStorage||!constrObj.isPop
-            const notImportant = !constrObj.name.match(/main|wood|stone|iron|storage/gm)
-            if(storangeAndPop || notImportant) {
-                delete snap.constructionObjs[id]
-            }
-
-        }
-        if(snap.constructionObjs.length==0&&farm!=null){
-            snap.constructionObjs[farm.id] = farm
-        }
+        filterConstruction(snap);
 
         let keys = Object.keys(snap.constructionObjs)
         for (let id of keys) {
             const constrObj = snap.constructionObjs[id]
             if(constrObj.isStorage&&constrObj.isPop) {
                 simVillage = deepClone(snap)
-                console.log(simVillage.simTemplate+("build("+id+",false);"))
-                build(id, false);
+
+                const newTempl = simVillage.simTemplate+("build("+id+",false);")
+                //console.debug(newTempl)
+                build(id, false)
+                rate()
                 nextGen.push(deepClone(simVillage))
                 combinations++
             }
         }
     }
+
     snapshots = nextGen
+    purgeSnapshots(10000)
     gen++
 
     skipUIupdates=false
     updateUI()
     const t1 = performance.now();
-    console.log('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
-    console.log(`Simulating took ${t1 - t0} milliseconds.`);
-    console.log("Gen: "+gen+ " Count: "+combinations)
-    console.log("Size: "+snapshots.length+" Storage: "+ (new Blob([JSON.stringify(snapshots[0])]).size * 0.00000095367432 * snapshots.length).toFixed(3) +" MB" )
+    console.info('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+    console.info(`Simulating took ${t1 - t0} milliseconds.`);
+    console.info("Gen: "+gen+ " Count: "+combinations)
+    console.info("Size: "+snapshots.length+" Storage: "+ (new Blob([JSON.stringify(snapshots[0])]).size * 0.00000095367432 * snapshots.length).toFixed(3) +" MB" )
     //console.log("Size: "+snapshots.length+" Storage: "+(new Blob([JSON.stringify(snapshots)]).size * 0.00000095367432).toFixed(3)+ " MB" )
-    console.log('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+    console.info('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+}
+
+function simAll(){
+    const t2 = performance.now();
+    while(filterConstruction(snapshots[0])>0) {
+        sim()
+    }
+    const t3 = performance.now();
+    console.info('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+    console.info(`Simulating took ${t3 - t2} milliseconds.`);
+    console.info("Gen: "+gen+ " Count: "+combinations)
+    console.info("Size: "+snapshots.length+" Storage: "+ (new Blob([JSON.stringify(snapshots[0])]).size * 0.00000095367432 * snapshots.length).toFixed(3) +" MB" )
+    //console.log("Size: "+snapshots.length+" Storage: "+(new Blob([JSON.stringify(snapshots)]).size * 0.00000095367432).toFixed(3)+ " MB" )
+    console.info('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+}
+
+function simTimes(times){
+    const t2 = performance.now();
+    while(times>0) {
+        sim()
+        times--
+    }
+    const t3 = performance.now();
+    console.info('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
+    console.info(`Simulating took ${t2 - t3} milliseconds.`);
+    console.info("Gen: "+gen+ " Count: "+combinations)
+    console.info("Size: "+snapshots.length+" Storage: "+ (new Blob([JSON.stringify(snapshots[0])]).size * 0.00000095367432 * snapshots.length).toFixed(3) +" MB" )
+    //console.log("Size: "+snapshots.length+" Storage: "+(new Blob([JSON.stringify(snapshots)]).size * 0.00000095367432).toFixed(3)+ " MB" )
+    console.info('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
 }
 
 function download() {
     $('#ds_body').after(`<button class="save-file">Save Snapshots</button>`)
     const saveBtn = document.querySelector('button.save-file')
-    let name = 'snapshots'
+    let name = gen+'Gen_Data_Pop_'+10000+'_Calculations_'+combinations
 
     saveBtn.addEventListener('click', function(){
 
@@ -668,6 +760,9 @@ function build(id, cheap) {
         simVillage.wood = enoughWood
         simVillage.stone = enoughStone
         simVillage.iron = enoughIron
+        simVillage.usedWood = (cheap ? constrObj.cWood : constrObj.wood)
+        simVillage.usedStone = (cheap ? constrObj.cStone : constrObj.stone)
+        simVillage.usedIron = (cheap ? constrObj.cIron : constrObj.iron)
         if (cheap) {
             simVillage.ppUsed += 30
             constrObj.cheap = true
@@ -856,7 +951,7 @@ function cancel(id) {
     //check for same building more than one time in que
     let matchingType = simVillage.buildQue.filter(e=>e.id.includes(type))
     if (matchingType.length > 1){
-        matchingType = matchingType.sort((a,b)=>a.lvl<b.lvl)
+        matchingType = matchingType.sort((a,b)=>b.lvl-a.lvl)
         lvl = matchingType[0].lvl
         hqlvl = matchingType[0].hqlvl
         id = (type + '|' + (parseInt(lvl)) + '|' + hqlvl)
@@ -869,6 +964,11 @@ function cancel(id) {
         simVillage.wood += (constrObj.cheap ? constrObj.cWood : constrObj.wood)
         simVillage.stone += (constrObj.cheap ? constrObj.cStone : constrObj.stone)
         simVillage.iron += (constrObj.cheap ? constrObj.cIron : constrObj.iron)
+
+        simVillage.usedWood -= (cheap ? constrObj.cWood : constrObj.wood)
+        simVillage.usedStone -= (cheap ? constrObj.cStone : constrObj.stone)
+        simVillage.usedIron -= (cheap ? constrObj.cIron : constrObj.iron)
+
         simVillage.nextbuilding[constrObj.name] = parseInt(constrObj.lvl - 1)
         simVillage.age -= constrObj.timePassed
 
@@ -1023,6 +1123,11 @@ function setup(speed,baseProd,bonusProd,w,s,i,building){
     simVillage.bounty = []
     simVillage.buildQue = []
     simVillage.constructionObjs = {}
+    simVillage.rating= 0
+
+    simVillage.usedWood= 0
+    simVillage.usedStone= 0
+    simVillage.usedIron= 0
 
     updateUI()
 }
@@ -1063,7 +1168,7 @@ function updateConstruction() {
         for (let building of Object.keys(simVillage.nextbuilding)) {
             //Construction
             let lvl = simVillage.nextbuilding[building]
-            if (parseInt(DSUtil.buildConf[building].max_level) > parseInt(lvl) && DSUtil.buildingReqirementsMet(simVillage.nextbuilding, building)) {
+            if (parseInt((goalVillage!=null?goalVillage[building]:DSUtil.buildConf[building].max_level)) > parseInt(lvl) && DSUtil.buildingReqirementsMet(simVillage.nextbuilding, building)) {
                 let constrObj = DSUtil.getBuildingObj(building, parseInt(lvl) + 1, hqlvl)
                 simVillage.constructionObjs[constrObj.id] = constrObj
                 if(!skipUIupdates) {
