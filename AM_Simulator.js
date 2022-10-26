@@ -446,9 +446,17 @@ DSUtil = {
 
 }
 
+function tmp() {
+    loadTemplate('setup(1.25|2|1.35|900|900|900|{main:1,barracks:0,stable:0,garage:0,snob:0,smith:0,market:0,wood:0,stone:0,iron:0,farm:1,storage:1,hide:0,wall:0});build(wood|1|1,false,undefined);build(stone|1|1,false,undefined);build(iron|1|1,false,undefined);build(stone|2|1,false,undefined);build(wood|2|1,false,undefined);build(iron|2|1,false,undefined);build(iron|3|1,false,undefined);build(stone|3|1,false,undefined);build(wood|3|1,false,undefined);build(wood|4|1,false,undefined);build(stone|4|1,false,undefined);claim();build(iron|4|1,false,undefined);claim();claim();build(wood|5|1,false,undefined);claim();claim();build(iron|5|1,false,undefined);claim();build(stone|5|1,false,undefined);claim();build(wood|6|1,false,undefined);claim();build(stone|6|1,false,undefined);claim();build(wood|7|1,false,undefined);claim();build(stone|7|1,false,undefined);claim();')
+
+    snapi = getSnapshotByTemplate('setup(1.25|2|1.35|900|900|900|{main:1,barracks:0,stable:0,garage:0,snob:0,smith:0,market:0,wood:0,stone:0,iron:0,farm:1,storage:1,hide:0,wall:0});build(wood|1|1,false,undefined);build(stone|1|1,false,undefined);build(iron|1|1,false,undefined);build(stone|2|1,false,undefined);build(wood|2|1,false,undefined);build(iron|2|1,false,undefined);build(iron|3|1,false,undefined);build(stone|3|1,false,undefined);build(wood|3|1,false,undefined);build(wood|4|1,false,undefined);build(stone|4|1,false,undefined);claim();build(iron|4|1,false,undefined);claim();claim();build(wood|5|1,false,1);claim();claim();build(iron|5|1,false,undefined);claim();build(stone|5|1,false,undefined);claim();build(wood|6|1,false,1);claim();build(stone|6|1,false,1);claim();build(wood|7|1,false,undefined);claim();build(stone|7|1,false,undefined);claim();')
+
+    result = compareSnapshots(simVillage,snapi)
+}
+
 skipUIupdates = false
 function updateUI() {
-    if(skipUIupdates) {
+    if(skipUIupdates||skipTaskSnapshots) {
         updateConstruction()
         return
     }
@@ -460,6 +468,8 @@ function updateUI() {
         updateVillageInfo(simVillage)
         updateTemplate()
         initTT()
+
+        templateView()
         const t1 = performance.now();
         console.log(`Updating UI took ${t1 - t0} milliseconds.`);
 }
@@ -553,10 +563,11 @@ function init() {
     simVillage.constructionObjs = {}
     startRes = {w:900,s:900,i:900}
     startRes.building = {...simVillage.building}
+    simVillage.taskSnapshots = []
 
     goalVillage = null;
-
     isStrict=false
+    skipTaskSnapshots=false
 
     //setup(1.6,1,1,900,900,900,"{barracks:25,farm:30,garage:8,hide:9,iron:30,main:20,market:23,place:1,smith:20,snob:1,stable:20,stone:30,storage:30,wall:20,wood:30}");
     setup(1.25,2,1.35,900,900,900,"{main:1,barracks:0,stable:0,garage:0,snob:0,smith:0,market:0,wood:0,stone:0,iron:0,farm:1,storage:1,hide:0,wall:0}");
@@ -568,15 +579,21 @@ gen=0
 combinations=0
 snapshots = [simVillage]
 
-function deepClone(original){
+function deepClone(original,withTaskSnapshots){
     let copy = JSON.parse(JSON.stringify(original));
-    copy.pop= ()=>DSUtil.popUsedVillage(simVillage.nextbuilding)
-    copy.points= ()=>DSUtil.pointsVillage(simVillage.building)
-    copy.pop_max= ()=>DSUtil.getFarm(simVillage.building["farm"])
-    copy.storage_max= ()=>DSUtil.getStorage(simVillage.building["storage"])
-    copy.wood_prod= (e)=>DSUtil.getResProduction(simVillage.building["wood"] + (e == undefined ? 0 : e), 'wood') / 3600
-    copy.stone_prod= (e)=>DSUtil.getResProduction(simVillage.building["stone"] + (e == undefined ? 0 : e), 'stone') / 3600
-    copy.iron_prod= (e)=>DSUtil.getResProduction(simVillage.building["iron"] + (e == undefined ? 0 : e), 'iron') / 3600
+    copy.pop= ()=>DSUtil.popUsedVillage(copy.nextbuilding)
+    copy.points= ()=>DSUtil.pointsVillage(copy.building)
+    copy.pop_max= ()=>DSUtil.getFarm(copy.building["farm"])
+    copy.storage_max= ()=>DSUtil.getStorage(copy.building["storage"])
+    copy.wood_prod= (e)=>DSUtil.getResProduction(copy.building["wood"] + (e == undefined ? 0 : e), 'wood') / 3600
+    copy.stone_prod= (e)=>DSUtil.getResProduction(copy.building["stone"] + (e == undefined ? 0 : e), 'stone') / 3600
+    copy.iron_prod= (e)=>DSUtil.getResProduction(copy.building["iron"] + (e == undefined ? 0 : e), 'iron') / 3600
+
+    //increase performance
+    if(withTaskSnapshots == undefined) {
+        copy.taskSnapshots = []
+    }
+
     return copy
 }
 
@@ -592,6 +609,19 @@ function rate(){
     //const ageRating = weights.r_age_factor*(simVillage.age)
     const valueRating = weights.r_value_factor*(simVillage.wood+simVillage.stone+simVillage.iron)/simVillage.age
     simVillage.rating =  valueRating
+}
+
+function compareSnapshots(a,b) {
+    return {
+        wood: b.wood-a.wood,
+        stone: b.stone-a.stone,
+        iron: b.iron-a.iron,
+        age: a.age - b.age,
+        oWood : b.overflow.wood-a.overflow.wood,
+        oStone : b.overflow.stone-a.overflow.stone,
+        oIron: b.overflow.iron-a.overflow.iron
+    }
+
 }
 
 
@@ -737,9 +767,14 @@ function download() {
         URL.revokeObjectURL(tempLink.href);
     })
 }
-
+autoCheap = true
 //Logic part
-function build(id, cheap) {
+function build(id, cheap, timesReduced) {
+    let constrObj = simVillage.constructionObjs[id]
+    if(autoCheap&&(constrObj.sumCost - constrObj.cCost) / 64 >= 30){
+        cheap=true
+    }
+
     //wait for free slot in que
     if(simVillage.buildQue.length>4&&!isStrict){
         const conObj = simVillage.buildQue[0]
@@ -748,13 +783,13 @@ function build(id, cheap) {
         build(id, cheap)
         return
     }
-    let constrObj = simVillage.constructionObjs[id]
+
     let enoughWood = simVillage.wood - (cheap ? constrObj.cWood : constrObj.wood)
     let enoughStone = simVillage.stone - (cheap ? constrObj.cStone : constrObj.stone)
     let enoughIron = simVillage.iron - (cheap ? constrObj.cIron : constrObj.iron)
 
     if (enoughWood >= 0 && enoughStone >= 0 && enoughIron >= 0) {
-        const task = "build(" + id + "," + cheap + ");"
+        const task = "build(" + id + "," + cheap + "," + timesReduced +");"
         simVillage.template += task
         simVillage.simTemplate += task
         simVillage.wood = enoughWood
@@ -767,11 +802,24 @@ function build(id, cheap) {
             simVillage.ppUsed += 30
             constrObj.cheap = true
         }
+        if (timesReduced!=undefined&&parseInt(timesReduced)>0){
+            constrObj.timesReduced += 1
+            simVillage.ppUsed += 10
+        }
         simVillage.buildQue.push(constrObj)
         //let[type,lvl,hqlvl] = id.split('|')
         simVillage.nextbuilding[constrObj.name] = parseInt(constrObj.lvl)
 
+        if(!skipTaskSnapshots) {
+            simVillage.taskSnapshots.push({
+                type: "build",
+                obj: constrObj,
+                snapshot: deepClone(simVillage)
+            })
+        }
+
         updateUI()
+
     } else {
         if(cheap?constrObj.isCStorage:constrObj.isStorage&&!isStrict){
             idle((cheap ? constrObj.cWood : constrObj.wood), (cheap ? constrObj.cStone : constrObj.stone), (cheap ? constrObj.cIron : constrObj.iron))
@@ -787,7 +835,6 @@ function idle(wood, stone, iron, idleTime) {
 
     if(!isIdle()&&idleTime<=0) {
         debugger
-        //loadTemplate('setup(1.25|2|1.35|900|900|900|{main:1,barracks:0,stable:0,garage:0,snob:0,smith:0,market:0,wood:0,stone:0,iron:0,farm:
     }
 
     wood=parseFloat(wood);
@@ -801,6 +848,9 @@ function idle(wood, stone, iron, idleTime) {
     let diffStone = stone - simVillage.stone
     let diffIron = iron - simVillage.iron
 
+    let idleWood = 0
+    let idleStone = 0
+    let idleIron = 0
 
 
     while (isIdle() ? (Math.max(diffWood, diffStone, diffIron) > 0) : (time < (idleTime + simVillage.age))) {
@@ -815,13 +865,13 @@ function idle(wood, stone, iron, idleTime) {
                     diffStone -= timeLeft * simVillage.stone_prod()
                     diffIron -= timeLeft * simVillage.iron_prod()
                 } else {
-                    simVillage.wood += timeLeft * simVillage.wood_prod()
-                    simVillage.stone += timeLeft * simVillage.stone_prod()
-                    simVillage.iron += timeLeft * simVillage.iron_prod()
+                    idleWood += timeLeft * simVillage.wood_prod()
+                    idleStone += timeLeft * simVillage.stone_prod()
+                    idleIron += timeLeft * simVillage.iron_prod()
                 }
                 time += timeLeft
 
-                //finisch Building 
+                //finisch Building
                 simVillage.building[constrObj.name] = parseInt(constrObj.lvl)
                 constrObj.timePassed += timeLeft
 
@@ -841,13 +891,13 @@ function idle(wood, stone, iron, idleTime) {
                     diffStone -= waitingTime * simVillage.stone_prod()
                     diffIron -= waitingTime * simVillage.iron_prod()
                 } else {
-                    simVillage.wood += waitingTime * simVillage.wood_prod()
-                    simVillage.stone += waitingTime * simVillage.stone_prod()
-                    simVillage.iron += waitingTime * simVillage.iron_prod()
+                    idleWood += waitingTime * simVillage.wood_prod()
+                    idleStone += waitingTime * simVillage.stone_prod()
+                    idleIron += waitingTime * simVillage.iron_prod()
                 }
                 time += waitingTime
 
-                //progress Building 
+                //progress Building
                 constrObj.timePassed += waitingTime
             }
         } else {
@@ -857,9 +907,9 @@ function idle(wood, stone, iron, idleTime) {
                 diffStone -= waitingTime * simVillage.stone_prod()
                 diffIron -= waitingTime * simVillage.iron_prod()
             } else {
-                simVillage.wood += waitingTime * simVillage.wood_prod()
-                simVillage.stone += waitingTime * simVillage.stone_prod()
-                simVillage.iron += waitingTime * simVillage.iron_prod()
+                idleWood += waitingTime * simVillage.wood_prod()
+                idleStone += waitingTime * simVillage.stone_prod()
+                idleIron += waitingTime * simVillage.iron_prod()
             }
             time += waitingTime
         }
@@ -869,10 +919,29 @@ function idle(wood, stone, iron, idleTime) {
         simVillage.wood = wood - diffWood
         simVillage.stone = stone - diffStone
         simVillage.iron = iron - diffIron
+    } else {
+        simVillage.wood += idleWood
+        simVillage.stone += idleStone
+        simVillage.iron += idleIron
     }
 
+    const actualWaited = time - simVillage.age
     simVillage.age = time
+
     checkForOverflow();
+
+    if(!skipTaskSnapshots) {
+        simVillage.taskSnapshots.push({
+            type: "idle",
+            wood: (isIdle() ? -diffWood : idleWood),
+            stone: (isIdle() ? -diffStone : idleStone),
+            iron: (isIdle() ? -diffIron : idleIron),
+            time: actualWaited,
+            isIdle: !isIdle(),
+            snapshot: deepClone(simVillage)
+        })
+    }
+
     updateUI()
 
 }
@@ -1010,6 +1079,22 @@ function claim() {
     updateUI()
 }
 
+function getSnapshotByTemplate(unprocessedTemplate) {
+    let taskSnaps = simVillage.taskSnapshots
+    let deepCopy = deepClone(simVillage,true)
+
+    skipTaskSnapshots = true
+    loadTemplate(unprocessedTemplate)
+    let loadedVillage = deepClone(simVillage)
+    skipTaskSnapshots = false
+
+    simVillage = deepCopy
+    simVillage.taskSnapshots = taskSnaps
+    updateUI()
+    return loadedVillage
+}
+
+
 function loadTemplate(unprocessedTemplate) {
     const t0 = performance.now();
     skipUIupdates=true
@@ -1037,8 +1122,8 @@ function loadTemplate(unprocessedTemplate) {
                 }
                 break;
             case "build":
-                let [id, cheap] = vars.split(',')
-                build(id.replaceAll("'", ''), cheap.replace(')', '') == "true")
+                let [id, cheap,timesReduced] = vars.split(',')
+                build(id.replaceAll("'", ''), cheap == "true",timesReduced.replace(')', ''))
                 break;
             case "setup":
                let [speed, baseProd,bonusPRod,w,s,i,building] = vars.split('|')
@@ -1073,6 +1158,7 @@ function revertLastStep(){
 }
 
 function updateSettings(){
+    // language=HTML
     let text = `
     <th>Geschwindichkeit: <input id="speed" style="width: 4em;margin:  1px;" min="1" max="5" value="${DSUtil.speed}"></input></th>
     <th>Minen-Basisproduktion: <input id="baseProd" style="width: 4em;margin:  1px;" min="1" max="5" value="${DSUtil.mineBaseProd}"></input></th>
@@ -1129,6 +1215,8 @@ function setup(speed,baseProd,bonusProd,w,s,i,building){
     simVillage.usedStone= 0
     simVillage.usedIron= 0
 
+    simVillage.taskSnapshots = []
+
     updateUI()
 }
 
@@ -1140,6 +1228,82 @@ function parseBuilding(text) {
         building[type] = parseInt(lvl)
     }
     return building
+}
+
+function templateView() {
+    let rows = ""
+    for (let i = 0; i < simVillage.taskSnapshots.length; i++) {
+        const snap = simVillage.taskSnapshots[i]
+        rows+=buildTemplateRow(snap)
+        
+    }
+
+
+    let list = `<div class="vis"><h4>Bauschleife</h4><ul id="template_queue" class="ui-sortable">${rows}</ul></div>`
+    $('.rtfr-am-sim-view').html(list);
+}
+
+function sizeMB(obj){
+    return (new Blob([JSON.stringify(obj)]).size * 0.00000095367432).toFixed(3)
+}
+
+function buildTemplateRow(snap){
+    //<img src="https://dsde.innogamescdn.com/asset/d2e376ee/graphic/buildings/storage.png" alt="Speicher" title="Speicher" class=""> 12%
+    switch (snap.type) {
+        case "build":
+            const constrObj = snap.obj
+            return `<li class="vis_item sortable_row">
+                <div style="float: left; width: 23%">
+                    <a class="inline-icon building-${constrObj.name}" >${constrObj.name}</a>
+                    <span class="level_relative"> +1</span>
+                    <span class="level_absolute"> (Stufe ${constrObj.lvl})</span>
+                </div>
+                <div style="float: left; width: 30%">
+                    <span class="optim" style="display: inline-flex;justify-content: space-evenly;align-items: center;">
+                        <span class="icon header wood"> </span> <div class="red">${(constrObj.cheap ? constrObj.cWood : constrObj.wood)}</div>
+                        <span class="icon header stone"> </span> <div class="red">${(constrObj.cheap ? constrObj.cStone : constrObj.stone)}</div>
+                        <span class="icon header iron"> </span> <div class="red">${(constrObj.cheap ? constrObj.cIron : constrObj.iron)}</div>
+                    </span>
+                </div>
+                <div style="float: left; width: 30%">
+                    <span class="optim" style="display: inline-flex;justify-content: space-evenly;align-items: center;">
+                        <span class="icon header wood"> </span> <div>${snap.snapshot.wood.toFixed(0)}</div>
+                        <span class="icon header stone"> </span> <div>${snap.snapshot.stone.toFixed(0)}</div>
+                        <span class="icon header iron"> </span> <div>${snap.snapshot.iron.toFixed(0)}</div>
+                    </span>
+                </div>
+                <div style="float: right;">
+                    <div style="width: 60px; float: left"><span class="icon header population"> </span> <span class="pop">${snap.snapshot.pop()}</span></div>
+                    <span class="points">${snap.snapshot.points()} Punkte</span>
+                </div>
+                <br style="clear: both;">
+            </li>`
+        case "idle":
+            return `<li class="vis_item sortable_row">
+                <div style="float: left; width: 25%">
+                    <a class="inline-icon icon header ${snap.isIdle?'time':'ressources'}" ></a>
+                    <a class="level_relative"> ${snap.isIdle?"Warten":"Rohstoffe"}</a>
+                    <span class="level_absolute"> (Dauer ${DSUtil.convertSecToTimeString(snap.time)})</span>
+                </div>
+                <div style="float: left; width: 30%">
+                    <span class="optim" style="display: inline-flex;justify-content: space-evenly;align-items: center;">
+                        <span class="icon header wood"> </span> <div class="green">${snap.wood.toFixed(0)}</div>
+                        <span class="icon header stone"> </span> <div class="green">${snap.stone.toFixed(0)}</div>
+                        <span class="icon header iron"> </span> <div class="green">${snap.iron.toFixed(0)}</div>
+                    </span>
+                </div>
+                <div style="float: left; width: 30%">
+                    <span class="optim" style="display: inline-flex;justify-content: space-evenly;align-items: center;">
+                        <span class="icon header wood"> </span> <div>${snap.snapshot.wood.toFixed(0)}</div>
+                        <span class="icon header stone"> </span> <div>${snap.snapshot.stone.toFixed(0)}</div>
+                        <span class="icon header iron"> </span> <div>${snap.snapshot.iron.toFixed(0)}</div>
+                    </span>
+                </div>
+                <br style="clear: both;">
+            </li>`
+        default:
+            return ""
+    }
 }
 
 //UI part
@@ -1496,6 +1660,8 @@ function renderUI(body) {
             </div>
             </br>
 			<div class="rtfr-am-sim-template">
+            </div>
+            <div class="rtfr-am-sim-view">
             </div>
         </div>
         <style>
