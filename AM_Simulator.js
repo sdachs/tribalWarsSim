@@ -446,6 +446,101 @@ DSUtil = {
 
 }
 
+function cheatSettings(){
+    // language=HTML
+    let text = `
+    <th>Geschwindigkeit: <input type="number"  class="cuestom" id="speed" style="width: 4em;margin:  1px;" min="1" max="5" value="1.25"></input></th>
+    <th>Minen-Basisproduktion: <input type="number" class="cuestom" id="baseProd" style="width: 4em;margin:  1px;" min="1" max="5" value="2"></input></th>
+    <th>Bonusproduktion in % : <input type="number" class="cuestom" id="bonusProd" style="width: 4em;margin:  1px;" min="0" max="93" value="83"></input></th>
+    <th>Reduziert : <input checked type="checkbox" class="cuestom" id="cheap" style="width: 4em;margin:  1px;" min="0" max="400000" value="true"></input></th>
+    <th>Belohnung : <input checked type="checkbox"  class="cuestom" id="bounty" style="width: 4em;margin:  1px;" min="0" max="400000" value="true"></input></th>
+`
+    $('#rtfr-header').html(text);
+
+    $('.cuestom').on('change',()=>{
+        console.log('changed');
+        cheatSheet( $('#cheap')[0].checked, $('#bounty')[0].checked, parseFloat($('#speed').val()), parseFloat($('#baseProd').val()), (parseFloat($('#bonusProd').val())+100)/100)
+    });
+    cheatSheet( $('#cheap')[0].checked, $('#bounty')[0].checked, parseFloat($('#speed').val()), parseFloat($('#baseProd').val()), (parseFloat($('#bonusProd').val())+100)/100)
+}
+
+function cheatSheet(cheap,bounty,speed,mineBaseProd,bonusProd){
+    DSUtil.speed = speed
+    DSUtil.mineBaseProd = mineBaseProd
+    DSUtil.bonusProd = bonusProd
+    let cheatSheet = []
+    for (let lvl = 1; lvl < 31; lvl++) {
+        cheatSheet.push([])
+        for (const type of ["wood","stone","iron"]) {
+            wood= DSUtil.buildCost(type, lvl, "wood")
+            stone= DSUtil.buildCost(type, lvl, "stone")
+            iron= DSUtil.buildCost(type, lvl, "iron")
+            cWood = Math.round(wood * 0.8)
+            cStone = Math.round(stone * 0.8)
+            cIron = Math.round(iron * 0.8)
+            bWood= Math.max(150, Math.min((0.1*(cheap?cWood:wood)), 2000))
+            bStone= Math.max(150, Math.min((0.1*(cheap?cStone:stone)), 2000))
+            bIron= Math.max(100, Math.min((0.1*(cheap?cIron:iron)), 2000))
+            cost = (cheap?(cWood +cStone+cIron):(wood + stone + iron)) - (bounty?(bWood +bStone+bIron):(0))
+            let resProd = DSUtil.getResProduction(lvl,type) - DSUtil.getResProduction(lvl-1,type)
+            cheatSheet[lvl-1].push((cost/resProd).toFixed(2))
+        }
+        cheatSheet[lvl-1].push(DSUtil.getResProduction(lvl,"wood"))
+    }
+    let body ="<br><br><table class='vis'><th>Level</th><th>Wood</th><th>Stone</th><th>Iron</th><th>Produktion</th>"
+    for (let i = 0; i < cheatSheet.length; i++) {
+        body += `<tr ${i%2==0?'class="row_a"':'class="row_b"'}> <td>${i+1}</td><td>${cheatSheet[i][0]}</td><td>${cheatSheet[i][1]}</td><td>${cheatSheet[i][2]}</td><td style="text-align: end;">${cheatSheet[i][3]}</td></tr>`
+    }
+    const content = `
+        <div class="rtfr-am-sim" id="rtfrVillagesInRange">
+			<div class="rtfr-am-sim-constr">
+            </div>
+        </div>
+        <style>
+            /*.rtfr-am-sim { position: relative; display: block; width: auto; height: auto; clear: both; margin: 0 auto 15px; padding: 10px; border: 1px solid #603000; box-sizing: border-box; background: #f4e4bc; }*/
+			.rtfr-am-sim * { box-sizing: border-box; }
+			.rtfr-am-sim input[type="text"] { width: 100%; padding: 5px 10px; border: 1px solid #000; font-size: 16px; line-height: 1; }
+			.rtfr-am-sim label { font-weight: 600 !important; margin-bottom: 5px; display: block; }
+			.rtfr-am-sim select { width: 100%; padding: 5px 10px; border: 1px solid #000; font-size: 16px; line-height: 1; }
+			.rtfr-am-sim .btn-confirm-yes { padding: 3px; }
+			.rtfr-am-sim .rtfr-grid { display: grid; grid-template-columns: 180px 1fr 180px 180px; grid-gap: 0 20px; }
+			/* Normal Table */
+			.rtfr-table { border-collapse: separate !important; border-spacing: 2px !important; empty-cells: show !important;}
+			.rtfr-table label,
+			.rtfr-table input { cursor: pointer; margin: 0; }
+			.rtfr-table th { font-size: 14px; }
+			.rtfr-table th,
+            .rtfr-table td { padding: 5px; text-align: center; }
+            .rtfr-table td a { word-break: break-all; }
+			.rtfr-table tr:nth-of-type(2n+1) td { background-color: #fff5da; }
+			.rtfr-table a:focus:not(a.btn) { color: blue; }
+			/* Popup Content */
+			.rtfr-popup-content { position: relative; display: block; width: 360px; }
+			.rtfr-popup-content * { box-sizing: border-box; }
+			.rtfr-popup-content label { font-weight: 600 !important; margin-bottom: 5px; display: block; }
+			.rtfr-popup-content textarea { width: 100%; height: 100px; resize: none; }
+			/* Helpers */
+			.rtfr-mb15 { margin-bottom: 15px; }
+			.rtfr-mb30 { margin-bottom: 30px; }
+			.rtfr-chosen-command td { background-color: #ffe563 !important; }
+			.rtfr-text-left { text-align: left !important; }
+			.rtfr-text-center { text-align: center !important; }
+			.rtfr-unit-count { display: inline-block; margin-top: 3px; vertical-align: top; }
+			.rtfr-green { color: #2fc52f; }
+			/* Buttons */
+			.rtfr-btn-fix.btn-bcr, .rtfr-btn-fix.btn-btr, .rtfr-btn-fix.btn-build, .rtfr-btn-fix.btn-build { background-image: url(https://dsde.innogamescdn.com/asset/0e187870/graphic/btn/buttons.png), linear-gradient( green 0%, green 22%, green 30%, green 100%) !important; }
+			.box {background-color: #cbab6b; !important}
+        </style>
+    `;
+
+    if (jQuery('.rtfr-am-sim').length) {
+        jQuery('.rtfr-am-sim-constr').html(body+"</table>");
+    } else {
+        jQuery('#content_value').prepend(content);
+    }
+    return cheatSheet
+}
+
 function tmp() {
     loadTemplate('setup(1.25|2|1.35|900|900|900|{main:1,barracks:0,stable:0,garage:0,snob:0,smith:0,market:0,wood:0,stone:0,iron:0,farm:1,storage:1,hide:0,wall:0});build(wood|1|1,false,undefined);build(stone|1|1,false,undefined);build(iron|1|1,false,undefined);build(stone|2|1,false,undefined);build(wood|2|1,false,undefined);build(iron|2|1,false,undefined);build(iron|3|1,false,undefined);build(stone|3|1,false,undefined);build(wood|3|1,false,undefined);build(wood|4|1,false,undefined);build(stone|4|1,false,undefined);claim();build(iron|4|1,false,undefined);claim();claim();build(wood|5|1,false,undefined);claim();claim();build(iron|5|1,false,undefined);claim();build(stone|5|1,false,undefined);claim();build(wood|6|1,false,undefined);claim();build(stone|6|1,false,undefined);claim();build(wood|7|1,false,undefined);claim();build(stone|7|1,false,undefined);claim();')
 
@@ -573,7 +668,6 @@ function init() {
     setup(1.25,2,1.35,900,900,900,"{main:1,barracks:0,stable:0,garage:0,snob:0,smith:0,market:0,wood:0,stone:0,iron:0,farm:1,storage:1,hide:0,wall:0}");
     //updateUI();
 }
-init()
 
 gen=0
 combinations=0
@@ -877,9 +971,9 @@ function idle(wood, stone, iron, idleTime) {
 
                 let finishedBuilding = simVillage.buildQue.shift()
                 simVillage.bounty.push({
-                    wood: Math.max(150, Math.min((0.1*finishedBuilding.wood), 2000)),
-                    stone: Math.max(150, Math.min((0.1*finishedBuilding.stone), 2000)),
-                    iron: Math.max(100, Math.min((0.1*finishedBuilding.iron), 2000))
+                    wood: Math.max(150, Math.min((0.1*(finishedBuilding.cheap?finishedBuilding.cWood:finishedBuilding.wood)), 2000)),
+                    stone: Math.max(150, Math.min((0.1*(finishedBuilding.cheap?finishedBuilding.cStone:finishedBuilding.stone)), 2000)),
+                    iron: Math.max(100, Math.min((0.1*(finishedBuilding.cheap?finishedBuilding.cIron:finishedBuilding.iron)), 2000))
                 })
                 //console.log(finishedBuilding)
                 //TODO template
