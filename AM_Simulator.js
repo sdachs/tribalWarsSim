@@ -451,7 +451,7 @@ function cheatSettings(){
     let text = `
     <th>Geschwindigkeit: <input type="number"  class="cuestom" id="speed" style="width: 4em;margin:  1px;" min="1" max="5" value="1.6"></input></th>
     <th>Minen-Basisproduktion: <input type="number" class="cuestom" id="baseProd" style="width: 4em;margin:  1px;" min="1" max="5" value="1"></input></th>
-    <th>Bonusproduktion in % : <input type="number" class="cuestom" id="bonusProd" style="width: 4em;margin:  1px;" min="0" max="93" value="50"></input></th>
+    <th>Bonusproduktion in % : <input type="number" class="cuestom" id="bonusProd" style="width: 4em;margin:  1px;" min="0" max="93" value="35"></input></th>
     <th>Reduziert : <input checked type="checkbox" class="cuestom" id="cheap" style="width: 4em;margin:  1px;" min="0" max="400000" value="true"></input></th>
     <th>Belohnung : <input checked type="checkbox"  class="cuestom" id="bounty" style="width: 4em;margin:  1px;" min="0" max="400000" value="true"></input></th>
 `
